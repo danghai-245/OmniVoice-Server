@@ -6,20 +6,24 @@ import shutil
 import tempfile
 import torch
 
-# Tự động cài đặt các thư viện nếu thiếu trên môi trường Cloud
+# Tự động cài đặt các thư viện và dự án nếu thiếu trên môi trường Cloud
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 try:
     import fastapi
     import gradio
     import soundfile
+    from transformers import HiggsAudioV2TokenizerModel
 except ImportError:
-    print("[*] Đang cài đặt các thư viện cần thiết cho Server...")
+    print("[*] Đang tiến hành cài đặt dự án và các thư viện phụ thuộc (dependencies) trên Cloud...")
     subprocess.check_call([
-        sys.executable, "-m", "pip", "install", 
-        "gradio", "soundfile"
+        sys.executable, "-m", "pip", "install", "-e", project_root
+    ])
+    subprocess.check_call([
+        sys.executable, "-m", "pip", "install", "gradio", "soundfile"
     ])
 
 # Thêm thư mục gốc dự án vào sys.path để import đúng module omnivoice
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 

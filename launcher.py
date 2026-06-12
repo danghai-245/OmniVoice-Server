@@ -200,6 +200,8 @@ class OmniVoiceGUI:
         self.run_mode_var.set(self.run_mode)
         self.api_server_url_var.set(self.api_server_url)
         self.chunk_len_var = tk.IntVar(value=500)
+        self.model_lock = threading.Lock()
+        self.stop_generating_flag = False
         
         # Xây dựng nội dung từng tab
         self.build_settings_tab()
@@ -316,21 +318,32 @@ class OmniVoiceGUI:
                 import google.generativeai as genai
                 genai.configure(api_key=api_key)
                 
-                model = genai.GenerativeModel("gemini-1.5-flash")
+                model = genai.GenerativeModel("gemini-3.5-flash")
                 
                 prompt = (
-                    "Bạn là một biên tập viên kịch bản chuyên nghiệp cho giọng đọc AI.\n"
-                    "Nhiệm vụ của bạn là đọc kỹ toàn bộ văn bản đầu vào dưới đây và chèn thêm các nhãn biểu cảm phù hợp vào đúng vị trí nhấn nhá để giọng đọc AI diễn cảm và tự nhiên hơn.\n\n"
-                    "Các nhãn biểu cảm được hỗ trợ (chỉ sử dụng chính xác các nhãn này):\n"
-                    "- [laughter] : dùng khi có tiếng cười, sự vui vẻ, châm biếm nhẹ\n"
-                    "- [sigh] : dùng khi thở dài, mệt mỏi, buồn chán, suy tư\n"
-                    "- [gasp] : dùng khi ngạc nhiên, thở dốc, sửng sốt, giật mình\n"
-                    "- [ask] : dùng để nhấn giọng hỏi, nghi vấn ở cuối câu hỏi hoặc câu lấp lửng\n"
-                    "- [disapproval] : dùng khi bày tỏ sự bất bình, thất vọng, không hài lòng\n\n"
-                    "Yêu cầu nghiêm ngặt:\n"
-                    "1. KHÔNG thêm bớt, chỉnh sửa hoặc thay đổi bất kỳ từ ngữ nào trong văn bản gốc. Chỉ chèn nhãn biểu cảm vào vị trí phù hợp (khoảng 3-5 câu chèn 1 nhãn, không chèn quá dày đặc làm nát văn bản).\n"
-                    "2. KHÔNG thêm bất kỳ câu giải thích, giới thiệu nào trước và sau văn bản kết quả.\n"
-                    "3. Trả về duy nhất văn bản sau khi đã chèn các nhãn biểu cảm.\n\n"
+                    "Bạn là một chuyên gia biên tập kịch bản cho giọng đọc AI.\n"
+                    "Nhiệm vụ của bạn là phân tích ngữ cảnh văn bản và chèn các thẻ cảm xúc/nhãn biểu cảm của OmniVoice dưới đây vào đúng vị trí để giọng đọc AI diễn cảm, sống động nhất (giống cách ElevenLabs v3 chèn thẻ biểu cảm vào văn bản).\n\n"
+                    "DANH SÁCH 13 THẺ CẢM XÚC HỖ TRỢ (TUYỆT ĐỐI KHÔNG TỰ SINH THẺ MỚI KHÁC DANH SÁCH NÀY):\n"
+                    "1. [laughter] : Dùng khi có tiếng cười, sự vui vẻ, châm biếm nhẹ.\n"
+                    "2. [sigh] : Dùng khi thở dài, mệt mỏi, buồn chán, suy tư.\n"
+                    "3. [confirmation-en] : Từ xác nhận ngắn như 'uh-huh', 'yeah' (tiếng Anh).\n"
+                    "4. [question-en] : Nhấn giọng nghi vấn hỏi tiếng Anh (như 'En?').\n"
+                    "5. [question-ah] : Nhấn giọng nghi vấn hỏi tiếng Việt/Trung (như 'Á?', 'Ủa?').\n"
+                    "6. [question-oh] : Nhấn giọng nghi vấn ngạc nhiên (như 'Ồ?').\n"
+                    "7. [question-ei] : Nhấn giọng nghi vấn hỏi lại (như 'Ê?', 'Hả?').\n"
+                    "8. [question-yi] : Nhấn giọng nghi vấn thắc mắc (như 'Ý?').\n"
+                    "9. [surprise-ah] : Biểu lộ ngạc nhiên, sửng sốt (như 'A!', 'Á!').\n"
+                    "10. [surprise-oh] : Biểu lộ ngạc nhiên, ngỡ ngàng (như 'Ồ!').\n"
+                    "11. [surprise-wa] : Biểu lộ kinh ngạc, trầm trồ (như 'Oa!').\n"
+                    "12. [surprise-yo] : Tiếng gọi ngạc nhiên, hào hứng (như 'Yo!', 'Dô!').\n"
+                    "13. [dissatisfaction-hnn] : Bày tỏ sự bất bình, hậm hực, thất vọng (như 'Hừm...', 'Hnn...').\n\n"
+                    "YÊU CẦU NGHIÊM NGẶT:\n"
+                    "1. Chỉ sử dụng các thẻ trong danh sách 13 thẻ trên. TUYỆT ĐỐI KHÔNG tự tạo ra bất kỳ thẻ mới nào ngoài danh sách này (ví dụ: không dùng [happy], [sad], [gasp], [ask], [disapproval] v.v.).\n"
+                    "2. KHÔNG thêm bớt hay thay đổi bất kỳ từ ngữ nào của văn bản gốc. Chỉ chèn thẻ vào vị trí hợp lý.\n"
+                    "3. ĐẶT THẺ CẢM XÚC Ở ĐẦU CÂU (TRƯỚC CÂU) HOẶC CUỐI CÂU (KHI ĐÃ KẾT THÚC CÂU). TUYỆT ĐỐI KHÔNG đặt thẻ cảm xúc chen ngang ở giữa câu (không chèn xen kẽ vào các từ của một câu nói liền mạch) để tránh làm đứt gãy ngữ điệu của giọng đọc.\n"
+                    "4. Chèn một cách tự nhiên và vừa phải (khoảng 2-4 câu chèn 1 thẻ, tránh chèn quá dày đặc).\n"
+                    "5. KHÔNG thêm bất kỳ câu giải thích hay ghi chú nào trước hoặc sau văn bản kết quả.\n"
+                    "6. Chỉ trả về duy nhất văn bản cuối cùng sau khi đã được chèn thẻ cảm xúc.\n\n"
                     "Văn bản gốc cần xử lý:\n"
                     f"\"\"\"\n{text}\n\"\"\""
                 )
@@ -362,7 +375,8 @@ class OmniVoiceGUI:
                     
             except Exception as err:
                 self.log(f"Lỗi khi gọi API Gemini: {err}", "ERROR")
-                self.root.after(0, lambda: messagebox.showerror("Lỗi", f"Lỗi khi gọi API Gemini:\n{err}"))
+                err_msg = str(err)
+                self.root.after(0, lambda msg=err_msg: messagebox.showerror("Lỗi", f"Lỗi khi gọi API Gemini:\n{msg}"))
                 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -872,7 +886,7 @@ class OmniVoiceGUI:
         
         # Dòng nút hành động (Auto chèn biểu cảm Gemini & Chia đoạn)
         f_chunk_actions = ttk.Frame(left_col)
-        f_chunk_actions.pack(fill=tk.X, pady=(0, 10))
+        f_chunk_actions.pack(fill=tk.X, pady=(0, 5))
         
         btn_gemini = ttk.Button(f_chunk_actions, text="✨ Auto chèn biểu cảm (Gemini)", command=self.insert_expressions_with_gemini)
         btn_gemini.pack(side=tk.LEFT, padx=(0, 10))
@@ -890,10 +904,12 @@ class OmniVoiceGUI:
         
         columns = ("stt", "content", "status", "file")
         self.tree_chunks = ttk.Treeview(f_tree, columns=columns, show="headings", height=8)
-        self.tree_chunks.heading("stt", text="STT")
-        self.tree_chunks.heading("content", text="Nội dung đoạn")
-        self.tree_chunks.heading("status", text="Trạng thái")
-        self.tree_chunks.heading("file", text="Đường dẫn file tạm")
+        
+        # Cho phép nhấn vào tiêu đề để sắp xếp
+        self.tree_chunks.heading("stt", text="STT", command=lambda: self.sort_treeview_column("stt", False))
+        self.tree_chunks.heading("content", text="Nội dung đoạn", command=lambda: self.sort_treeview_column("content", False))
+        self.tree_chunks.heading("status", text="Trạng thái", command=lambda: self.sort_treeview_column("status", False))
+        self.tree_chunks.heading("file", text="Đường dẫn file tạm", command=lambda: self.sort_treeview_column("file", False))
         
         self.tree_chunks.column("stt", width=45, minwidth=40, anchor=tk.CENTER)
         self.tree_chunks.column("content", width=320, minwidth=250, anchor=tk.W)
@@ -909,114 +925,131 @@ class OmniVoiceGUI:
         # Double click to play
         self.tree_chunks.bind("<Double-1>", lambda event: self.play_selected_chunk())
         
-        # Các nút thao tác trên treeview
+        # Các nút thao tác trên treeview (tất cả trên 1 hàng ngang, text rút gọn để hiển thị đầy đủ)
         f_actions = ttk.Frame(left_col, padding=5)
         f_actions.pack(fill=tk.X, pady=(5, 0))
         
-        self.btn_engine_gen_sel = ttk.Button(f_actions, text="🎙️ Tạo đoạn đã chọn", command=self.generate_selected_chunk)
-        self.btn_engine_gen_sel.pack(side=tk.LEFT, padx=5)
-        self.btn_engine_gen_all = ttk.Button(f_actions, text="🎙️ Tạo tất cả các đoạn", style="Accent.TButton", command=self.generate_all_chunks)
-        self.btn_engine_gen_all.pack(side=tk.LEFT, padx=5)
-        self.btn_engine_play_sel = ttk.Button(f_actions, text="▶️ Phát đoạn đã chọn", command=self.play_selected_chunk)
-        self.btn_engine_play_sel.pack(side=tk.LEFT, padx=5)
-        self.btn_engine_stop = ttk.Button(f_actions, text="⏹️ Dừng phát", style="Stop.TButton", command=self.stop_audio_playback)
-        self.btn_engine_stop.pack(side=tk.LEFT, padx=5)
+        self.btn_engine_gen_all = ttk.Button(f_actions, text="🎙️ Tạo tất cả", style="Accent.TButton", command=self.generate_all_chunks)
+        self.btn_engine_gen_all.pack(side=tk.LEFT, padx=3)
+        
+        self.btn_engine_stop_gen = ttk.Button(f_actions, text="🛑 Dừng tạo", style="Stop.TButton", command=self.stop_generating_voice)
+        self.btn_engine_stop_gen.pack(side=tk.LEFT, padx=3)
+        
+        self.btn_engine_gen_sel = ttk.Button(f_actions, text="🎙️ Tạo đoạn chọn", command=self.generate_selected_chunk)
+        self.btn_engine_gen_sel.pack(side=tk.LEFT, padx=3)
+        
+        self.btn_engine_gen_failed = ttk.Button(f_actions, text="🔄 Tạo lại lỗi", command=self.generate_failed_chunks)
+        self.btn_engine_gen_failed.pack(side=tk.LEFT, padx=3)
+        
+        self.btn_engine_play_sel = ttk.Button(f_actions, text="▶️ Phát chọn", command=self.play_selected_chunk)
+        self.btn_engine_play_sel.pack(side=tk.LEFT, padx=3)
+        
+        self.btn_engine_stop = ttk.Button(f_actions, text="⏹️ Dừng", style="Stop.TButton", command=self.stop_audio_playback)
+        self.btn_engine_stop.pack(side=tk.LEFT, padx=3)
         
         # --- CỘT PHẢI: Cấu hình giọng & Xuất file ---
         # 1. Chọn giọng đọc tham chiếu (Voice Clone)
-        card_ref = ttk.LabelFrame(right_col, text=" 👤 Giọng đọc tham chiếu (Voice Clone) ", padding=12)
-        card_ref.pack(fill=tk.X, pady=(0, 15))
+        card_ref = ttk.LabelFrame(right_col, text=" 👤 Giọng đọc tham chiếu (Voice Clone) ", padding=6)
+        card_ref.pack(fill=tk.X, pady=(0, 10))
         
         ttk.Label(card_ref, text="Chọn giọng đã lưu:").pack(anchor=tk.W, pady=(0, 2))
         self.engine_saved_voices_combo = ttk.Combobox(card_ref, state="readonly")
-        self.engine_saved_voices_combo.pack(fill=tk.X, pady=(0, 5))
+        self.engine_saved_voices_combo.pack(fill=tk.X, pady=(0, 4))
         self.engine_saved_voices_combo.bind("<<ComboboxSelected>>", self.on_engine_voice_selected)
         
         self.engine_ref_audio = tk.StringVar(value="")
         self.engine_ref_text = tk.StringVar(value="")
         
         self.lbl_engine_voice_info = ttk.Label(card_ref, text="Chưa chọn giọng tham chiếu.", font=("Segoe UI", 9, "italic"), foreground="#A0A0AA")
-        self.lbl_engine_voice_info.pack(anchor=tk.W, pady=2)
+        self.lbl_engine_voice_info.pack(anchor=tk.W, pady=1)
         
         # 2. Đặc tính giọng nói (Voice Design)
-        card_config = ttk.LabelFrame(right_col, text=" 🎛️ Tinh chỉnh phát âm & Đặc tính giọng ", padding=12)
-        card_config.pack(fill=tk.X, pady=(0, 15))
+        card_config = ttk.LabelFrame(right_col, text=" 🎛️ Tinh chỉnh phát âm & Đặc tính giọng ", padding=8)
+        card_config.pack(fill=tk.X, pady=(0, 8))
         
-        # Ngôn ngữ
-        ttk.Label(card_config, text="Ngôn ngữ đọc (Language):").pack(anchor=tk.W, pady=(0, 2))
+        # Grid layout để tiết kiệm không gian đứng, tránh tràn màn hình
+        grid_config = ttk.Frame(card_config)
+        grid_config.pack(fill=tk.X)
+        grid_config.columnconfigure(0, weight=1)
+        grid_config.columnconfigure(1, weight=1)
+        
+        # Hàng 0, 1: Ngôn ngữ (Cột 0) và Đặc tính (Cột 1)
+        ttk.Label(grid_config, text="Ngôn ngữ đọc (Language):").grid(row=0, column=0, sticky=tk.W, pady=(2, 2), padx=(0, 10))
         self.engine_lang_var = tk.StringVar(value="Auto")
-        self.engine_lang_combo = ttk.Combobox(card_config, textvariable=self.engine_lang_var, state="readonly")
+        self.engine_lang_combo = ttk.Combobox(grid_config, textvariable=self.engine_lang_var, state="readonly")
         self.engine_lang_combo['values'] = ["Auto", "English", "Vietnamese", "Chinese", "Korean", "Japanese", "French", "German", "Spanish", "Russian"]
-        self.engine_lang_combo.pack(fill=tk.X, pady=(0, 8))
+        self.engine_lang_combo.grid(row=1, column=0, sticky=tk.EW, pady=(0, 6), padx=(0, 10))
         
-        # Tốc độ
-        ttk.Label(card_config, text="Tốc độ đọc (Speed):").pack(anchor=tk.W, pady=(0, 2))
+        ttk.Label(grid_config, text="Đặc tính / Accent (Instruct):").grid(row=0, column=1, sticky=tk.W, pady=(2, 2))
+        self.engine_style_var = tk.StringVar(value="Auto")
+        self.engine_style_combo = ttk.Combobox(grid_config, textvariable=self.engine_style_var, state="readonly")
+        self.engine_style_combo['values'] = [
+            "Auto", "Male / Giọng nam", "Female / Giọng nữ", "Whisper / Thì thầm", 
+            "Child / Trẻ em", "Teenager / Thiếu niên", "Young adult / Thanh niên", 
+            "Middle-aged / Trung niên", "Elderly / Người già", "American accent / Giọng Mỹ", 
+            "British accent / Giọng Anh", "Australian accent / Giọng Úc", "Indian accent / Giọng Ấn Độ"
+        ]
+        self.engine_style_combo.grid(row=1, column=1, sticky=tk.EW, pady=(0, 6))
+        
+        # Hàng 2, 3: Cao độ (Cột 0) và Số luồng tạo (Cột 1)
+        ttk.Label(grid_config, text="Cao độ (Pitch):").grid(row=2, column=0, sticky=tk.W, pady=(2, 2), padx=(0, 10))
+        self.engine_pitch_var = tk.StringVar(value="Auto")
+        self.engine_pitch_combo = ttk.Combobox(grid_config, textvariable=self.engine_pitch_var, state="readonly")
+        self.engine_pitch_combo['values'] = [
+            "Auto", "Very low pitch / Cực trầm", "Low pitch / Giọng trầm", 
+            "Moderate pitch / Giọng vừa", "High pitch / Giọng cao", "Very high pitch / Cực cao"
+        ]
+        self.engine_pitch_combo.grid(row=3, column=0, sticky=tk.EW, pady=(0, 6), padx=(0, 10))
+
+        ttk.Label(grid_config, text="Số luồng tạo (Threads):").grid(row=2, column=1, sticky=tk.W, pady=(2, 2))
+        self.engine_threads_var = tk.StringVar(value="1")
+        self.engine_threads_combo = ttk.Combobox(grid_config, textvariable=self.engine_threads_var, state="readonly")
+        self.engine_threads_combo['values'] = ["1", "2", "3", "4", "6", "8", "12", "16"]
+        self.engine_threads_combo.grid(row=3, column=1, sticky=tk.EW, pady=(0, 6))
+        
+        # Hàng 4, 5: Khử nhiễu (Cột 0) và Tốc độ đọc (Cột 1)
+        ttk.Label(grid_config, text="Khử nhiễu (Steps):").grid(row=4, column=0, sticky=tk.W, pady=(2, 2), padx=(0, 10))
+        f_steps = ttk.Frame(grid_config)
+        f_steps.grid(row=5, column=0, sticky=tk.EW, pady=(0, 4), padx=(0, 10))
+        
+        self.engine_steps_var = tk.IntVar(value=32)
+        self.engine_steps_slider = ttk.Scale(f_steps, from_=4, to=64, variable=self.engine_steps_var, orient=tk.HORIZONTAL)
+        self.engine_steps_slider.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        self.lbl_engine_steps_val = ttk.Label(f_steps, text="32", font=("Segoe UI", 9, "bold"), foreground="#00ADB5", width=4)
+        self.lbl_engine_steps_val.pack(side=tk.RIGHT)
+        self.engine_steps_var.trace_add("write", lambda *args: self.lbl_engine_steps_val.configure(text=f"{int(self.engine_steps_var.get())}"))
+
+        ttk.Label(grid_config, text="Tốc độ đọc (Speed):").grid(row=4, column=1, sticky=tk.W, pady=(2, 2))
+        f_speed = ttk.Frame(grid_config)
+        f_speed.grid(row=5, column=1, sticky=tk.EW, pady=(0, 4))
+        
         self.engine_speed_var = tk.DoubleVar(value=1.0)
-        self.engine_speed_slider = ttk.Scale(card_config, from_=0.5, to=1.5, variable=self.engine_speed_var, orient=tk.HORIZONTAL)
-        self.engine_speed_slider.pack(fill=tk.X, pady=(0, 2))
-        self.lbl_engine_speed_val = ttk.Label(card_config, text="1.00x", font=("Segoe UI", 9, "bold"), foreground="#00ADB5")
-        self.lbl_engine_speed_val.pack(anchor=tk.E, pady=(0, 8))
+        self.engine_speed_slider = ttk.Scale(f_speed, from_=0.5, to=1.5, variable=self.engine_speed_var, orient=tk.HORIZONTAL)
+        self.engine_speed_slider.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        self.lbl_engine_speed_val = ttk.Label(f_speed, text="1.00x", font=("Segoe UI", 9, "bold"), foreground="#00ADB5", width=6)
+        self.lbl_engine_speed_val.pack(side=tk.RIGHT)
         self.engine_speed_var.trace_add("write", lambda *args: self.lbl_engine_speed_val.configure(text=f"{self.engine_speed_var.get():.2f}x"))
         
-        # Cao độ (Pitch)
-        ttk.Label(card_config, text="Cao độ (Pitch):").pack(anchor=tk.W, pady=(0, 2))
-        self.engine_pitch_var = tk.StringVar(value="Auto")
-        self.engine_pitch_combo = ttk.Combobox(card_config, textvariable=self.engine_pitch_var, state="readonly")
-        self.engine_pitch_combo['values'] = [
-            "Auto", 
-            "Very low pitch / Cực trầm", 
-            "Low pitch / Giọng trầm", 
-            "Moderate pitch / Giọng vừa", 
-            "High pitch / Giọng cao", 
-            "Very high pitch / Cực cao"
-        ]
-        self.engine_pitch_combo.pack(fill=tk.X, pady=(0, 8))
-        
-        # Đặc tính / Accent (Instruct)
-        ttk.Label(card_config, text="Đặc tính / Accent (Instruct):").pack(anchor=tk.W, pady=(0, 2))
-        self.engine_style_var = tk.StringVar(value="Auto")
-        self.engine_style_combo = ttk.Combobox(card_config, textvariable=self.engine_style_var, state="readonly")
-        self.engine_style_combo['values'] = [
-            "Auto", 
-            "Male / Giọng nam", 
-            "Female / Giọng nữ", 
-            "Whisper / Thì thầm", 
-            "Child / Trẻ em", 
-            "Teenager / Thiếu niên", 
-            "Young adult / Thanh niên", 
-            "Middle-aged / Trung niên", 
-            "Elderly / Người già", 
-            "American accent / Giọng Mỹ", 
-            "British accent / Giọng Anh", 
-            "Australian accent / Giọng Úc", 
-            "Indian accent / Giọng Ấn Độ"
-        ]
-        self.engine_style_combo.pack(fill=tk.X, pady=(0, 8))
-        
-        # Steps
-        ttk.Label(card_config, text="Số bước khử nhiễu (Steps):").pack(anchor=tk.W, pady=(0, 2))
-        self.engine_steps_var = tk.IntVar(value=32)
-        self.engine_steps_slider = ttk.Scale(card_config, from_=4, to=64, variable=self.engine_steps_var, orient=tk.HORIZONTAL)
-        self.engine_steps_slider.pack(fill=tk.X, pady=(0, 2))
-        self.lbl_engine_steps_val = ttk.Label(card_config, text="32 bước", font=("Segoe UI", 9, "bold"), foreground="#00ADB5")
-        self.lbl_engine_steps_val.pack(anchor=tk.E, pady=(0, 5))
-        self.engine_steps_var.trace_add("write", lambda *args: self.lbl_engine_steps_val.configure(text=f"{int(self.engine_steps_var.get())} bước"))
-        
         # 3. Gộp & Xuất bản
-        card_export = ttk.LabelFrame(right_col, text=" 📦 Gộp & Xuất bản tệp hoàn chỉnh ", padding=12)
-        card_export.pack(fill=tk.X, pady=(0, 15))
+        card_export = ttk.LabelFrame(right_col, text=" 📦 Gộp & Xuất bản tệp hoàn chỉnh ", padding=8)
+        card_export.pack(fill=tk.X, pady=(0, 6))
         
         ttk.Label(card_export, text="Đường dẫn lưu file hoàn chỉnh:").pack(anchor=tk.W, pady=(0, 2))
         self.engine_dest_path = tk.StringVar(value="")
         
         f_dest = ttk.Frame(card_export)
-        f_dest.pack(fill=tk.X, pady=(0, 10))
+        f_dest.pack(fill=tk.X, pady=(0, 6))
         self.ent_engine_dest = ttk.Entry(f_dest, textvariable=self.engine_dest_path)
         self.ent_engine_dest.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
         ttk.Button(f_dest, text="📂 Chọn", command=self.select_engine_export_path).pack(side=tk.RIGHT)
         
-        self.btn_engine_merge = ttk.Button(card_export, text="📦 GỘP CÁC ĐOẠN & XUẤT FILE", style="Accent.TButton", command=self.merge_all_chunks)
-        self.btn_engine_merge.pack(fill=tk.X, ipady=3)
+        # Checkbox cấu hình tự động xóa file tạm
+        self.delete_temp_after_merge_var = tk.BooleanVar(value=True)
+        self.chk_delete_temp = ttk.Checkbutton(card_export, text="Tự động dọn dẹp (xóa) toàn bộ file tạm sau khi gộp", variable=self.delete_temp_after_merge_var)
+        self.chk_delete_temp.pack(anchor=tk.W, pady=(0, 6))
+        
+        self.btn_engine_merge = ttk.Button(card_export, text="📦 GỘP CÁC ĐOẠN & DỌN DẸP FILE TẠM", style="Accent.TButton", command=self.merge_all_chunks)
+        self.btn_engine_merge.pack(fill=tk.X, ipady=4)
         
         # Dữ liệu chunks trống
         self.chunks_data = []
@@ -1593,7 +1626,7 @@ class OmniVoiceGUI:
 
         return ref_audio, ref_text, instruct_str
 
-    def _call_cloud_api(self, text, language, ref_audio, ref_text, instruct_str, speed, num_step, progress_cb=None):
+    def _call_cloud_api(self, text, language, ref_audio, ref_text, instruct_str, speed, num_step, chunk_index=None, progress_cb=None):
         from gradio_client import Client, handle_file
         import shutil
         
@@ -1606,7 +1639,7 @@ class OmniVoiceGUI:
                 progress_cb(10, 100)
                 
             self.log(f"Đang kết nối tới Cloud Server: {server_url}")
-            client = Client(server_url, timeout=180)
+            client = Client(server_url)
             
             if progress_cb:
                 progress_cb(30, 100)
@@ -1636,7 +1669,8 @@ class OmniVoiceGUI:
                 
             temp_dir = os.path.join(output_dir, "temp_chunks")
             os.makedirs(temp_dir, exist_ok=True)
-            filename = f"chunk_{time.strftime('%Y%m%d_%H%M%S')}_cloud.wav"
+            suffix = f"_{chunk_index}" if chunk_index is not None else "_cloud"
+            filename = f"chunk_{time.strftime('%Y%m%d_%H%M%S')}{suffix}.wav"
             filepath = os.path.join(temp_dir, filename)
             
             shutil.copy(result, filepath)
@@ -1685,6 +1719,7 @@ class OmniVoiceGUI:
                     instruct_str=instruct_str,
                     speed=speed,
                     num_step=num_step,
+                    chunk_index=chunk_info['index'],
                     progress_cb=progress_cb
                 )
             else:
@@ -1741,6 +1776,7 @@ class OmniVoiceGUI:
             messagebox.showwarning("Cảnh báo", "Mô hình đang bận xử lý tác vụ khác, vui lòng đợi!")
             return
             
+        self.stop_generating_flag = False
         for chunk in self.chunks_data:
             self.tree_chunks.item(chunk['item_id'], values=(chunk['index'], chunk['text'], "Chờ xử lý...", ""))
             chunk['status'] = "Chờ xử lý"
@@ -1765,11 +1801,21 @@ class OmniVoiceGUI:
     def generate_all_chunks_worker(self, raw_ref_audio, raw_ref_text, raw_pitch, raw_style, raw_voice_combo):
         global loaded_model, model_generating
         import soundfile as sf
+        from concurrent.futures import ThreadPoolExecutor
+        import threading
         
         lang = self.engine_lang_var.get()
         language = lang if lang != "Auto" else None
         speed = float(self.engine_speed_var.get())
         num_step = int(self.engine_steps_var.get())
+        
+        # Lấy số luồng tối đa được cấu hình trên giao diện
+        try:
+            max_workers = int(self.engine_threads_var.get())
+        except Exception:
+            max_workers = 1
+            
+        self.log(f"Khởi chạy tiến trình song song với {max_workers} luồng xử lý...")
         
         # Giải quyết các tham số tham chiếu và phong cách an toàn trong luồng phụ
         ref_audio, ref_text, instruct_str = self._resolve_engine_parameters(
@@ -1779,8 +1825,15 @@ class OmniVoiceGUI:
         temp_dir = os.path.join(output_dir, "temp_chunks")
         os.makedirs(temp_dir, exist_ok=True)
         
+        success_counter_lock = threading.Lock()
         success_count = 0
-        for chunk in self.chunks_data:
+        
+        def process_chunk(chunk):
+            if self.stop_generating_flag:
+                chunk['status'] = "Chưa tạo"
+                self.root.after(0, lambda c=chunk: self.tree_chunks.item(c['item_id'], values=(c['index'], c['text'], "Chưa tạo", "")))
+                return
+            nonlocal success_count
             chunk['status'] = "Đang xử lý..."
             self.root.after(0, lambda c=chunk: self.tree_chunks.item(c['item_id'], values=(c['index'], c['text'], "Đang xử lý...", "")))
             
@@ -1800,19 +1853,22 @@ class OmniVoiceGUI:
                         instruct_str=instruct_str,
                         speed=speed,
                         num_step=num_step,
+                        chunk_index=chunk['index'],
                         progress_cb=make_progress_cb(chunk)
                     )
                 else:
-                    audio_data = loaded_model.generate(
-                        text=chunk['text'],
-                        language=language,
-                        ref_audio=ref_audio,
-                        ref_text=ref_text,
-                        instruct=instruct_str,
-                        speed=speed,
-                        num_step=num_step,
-                        progress_callback=make_progress_cb(chunk)
-                    )
+                    # Chế độ chạy local: Sử dụng model_lock để tránh xung đột CUDA context
+                    with self.model_lock:
+                        audio_data = loaded_model.generate(
+                            text=chunk['text'],
+                            language=language,
+                            ref_audio=ref_audio,
+                            ref_text=ref_text,
+                            instruct=instruct_str,
+                            speed=speed,
+                            num_step=num_step,
+                            progress_callback=make_progress_cb(chunk)
+                        )
                     filename = f"chunk_{time.strftime('%Y%m%d_%H%M%S')}_{chunk['index']}.wav"
                     filepath = os.path.join(temp_dir, filename)
                     sf.write(filepath, audio_data[0], loaded_model.sampling_rate)
@@ -1824,7 +1880,8 @@ class OmniVoiceGUI:
                     c['item_id'], 
                     values=(c['index'], c['text'], "Hoàn thành", path)
                 ))
-                success_count += 1
+                with success_counter_lock:
+                    success_count += 1
                 
             except Exception as e:
                 chunk['status'] = "Lỗi"
@@ -1833,9 +1890,187 @@ class OmniVoiceGUI:
                     values=(c['index'], c['text'], "Lỗi", "")
                 ))
                 self.log(f"Lỗi khi sinh đoạn {chunk['index']}: {e}", "ERROR")
-                
+
+        # Sử dụng ThreadPoolExecutor để quản lý và phân phối các luồng xử lý
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            executor.map(process_chunk, self.chunks_data)
+            
         model_generating = False
-        self.log(f"Hoàn thành quá trình sinh tuần tự: {success_count}/{len(self.chunks_data)} đoạn thành công.")
+        self.log(f"Hoàn thành quá trình sinh: {success_count}/{len(self.chunks_data)} đoạn thành công.")
+
+    def sort_treeview_column(self, col, reverse):
+        # Lấy dữ liệu các hàng trong Treeview
+        items = [(self.tree_chunks.set(k, col), k) for k in self.tree_chunks.get_children('')]
+        
+        # Sắp xếp
+        if col == "stt":
+            try:
+                items.sort(key=lambda t: int(t[0]), reverse=reverse)
+            except ValueError:
+                items.sort(reverse=reverse)
+        else:
+            items.sort(reverse=reverse)
+            
+        # Sắp xếp lại thứ tự các hàng hiển thị
+        for index, (val, k) in enumerate(items):
+            self.tree_chunks.move(k, '', index)
+            
+        # Gán lại callback cho tiêu đề với reverse ngược lại cho click tiếp theo
+        self.tree_chunks.heading(col, command=lambda: self.sort_treeview_column(col, not reverse))
+
+    def stop_generating_voice(self):
+        global model_generating
+        if not model_generating:
+            return
+        self.stop_generating_flag = True
+        self.log("Đã kích hoạt cờ dừng tạo. Các luồng đang chạy sẽ bỏ qua các đoạn còn lại...", "WARNING")
+
+    def generate_failed_chunks(self):
+        if not hasattr(self, 'chunks_data') or not self.chunks_data:
+            messagebox.showwarning("Cảnh báo", "Vui lòng chia đoạn văn bản trước!")
+            return
+            
+        failed_chunks = [c for c in self.chunks_data if c['status'] == "Lỗi"]
+        if not failed_chunks:
+            messagebox.showinfo("Thông báo", "Không có đoạn nào bị lỗi để tạo lại!")
+            return
+            
+        global loaded_model, model_generating, model_loading
+        if "Cloud API" not in self.run_mode_var.get():
+            if loaded_model is None:
+                if model_loading:
+                    messagebox.showinfo("Thông báo", "Đang nạp mô hình trong nền, vui lòng đợi một chút rồi bấm lại!")
+                    return
+                self.log("Mô hình chưa được nạp. Đang tự động nạp mô hình trước...")
+                self.start_load_model()
+                return
+            
+        if model_generating:
+            messagebox.showwarning("Cảnh báo", "Mô hình đang bận xử lý tác vụ khác, vui lòng đợi!")
+            return
+            
+        self.stop_generating_flag = False
+        for chunk in failed_chunks:
+            self.tree_chunks.item(chunk['item_id'], values=(chunk['index'], chunk['text'], "Chờ xử lý...", ""))
+            chunk['status'] = "Chờ xử lý"
+            chunk['file_path'] = None
+            
+        # Lấy giá trị thô trên Main Thread để đảm bảo an toàn cho giao diện Tkinter
+        raw_ref_audio = self.engine_ref_audio.get()
+        raw_ref_text = self.engine_ref_text.get()
+        raw_pitch = self.engine_pitch_var.get()
+        raw_style = self.engine_style_var.get()
+        raw_voice_combo = self.engine_saved_voices_combo.get()
+
+        model_generating = True
+        self.log(f"Bắt đầu tạo lại {len(failed_chunks)} đoạn bị lỗi...")
+        
+        threading.Thread(
+            target=self.generate_failed_chunks_worker, 
+            args=(failed_chunks, raw_ref_audio, raw_ref_text, raw_pitch, raw_style, raw_voice_combo),
+            daemon=True
+        ).start()
+
+    def generate_failed_chunks_worker(self, failed_chunks, raw_ref_audio, raw_ref_text, raw_pitch, raw_style, raw_voice_combo):
+        global loaded_model, model_generating
+        import soundfile as sf
+        from concurrent.futures import ThreadPoolExecutor
+        import threading
+        
+        lang = self.engine_lang_var.get()
+        language = lang if lang != "Auto" else None
+        speed = float(self.engine_speed_var.get())
+        num_step = int(self.engine_steps_var.get())
+        
+        # Lấy số luồng tối đa được cấu hình trên giao diện
+        try:
+            max_workers = int(self.engine_threads_var.get())
+        except Exception:
+            max_workers = 1
+            
+        self.log(f"Khởi chạy tiến trình song song tạo lại lỗi với {max_workers} luồng xử lý...")
+        
+        # Giải quyết các tham số tham chiếu và phong cách an toàn trong luồng phụ
+        ref_audio, ref_text, instruct_str = self._resolve_engine_parameters(
+            raw_ref_audio, raw_ref_text, raw_pitch, raw_style, raw_voice_combo
+        )
+        
+        temp_dir = os.path.join(output_dir, "temp_chunks")
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        success_counter_lock = threading.Lock()
+        success_count = 0
+        
+        def process_chunk(chunk):
+            if self.stop_generating_flag:
+                chunk['status'] = "Lỗi"
+                self.root.after(0, lambda c=chunk: self.tree_chunks.item(c['item_id'], values=(c['index'], c['text'], "Lỗi", "")))
+                return
+            nonlocal success_count
+            chunk['status'] = "Đang xử lý..."
+            self.root.after(0, lambda c=chunk: self.tree_chunks.item(c['item_id'], values=(c['index'], c['text'], "Đang xử lý...", "")))
+            
+            try:
+                def make_progress_cb(ch):
+                    return lambda step, total_steps: self.root.after(0, lambda: self.tree_chunks.item(
+                        ch['item_id'], 
+                        values=(ch['index'], ch['text'], f"Đang xử lý ({int(step / total_steps * 100)}%)", "")
+                    ))
+
+                if "Cloud API" in self.run_mode_var.get():
+                    filepath = self._call_cloud_api(
+                        text=chunk['text'],
+                        language=language,
+                        ref_audio=ref_audio,
+                        ref_text=ref_text,
+                        instruct_str=instruct_str,
+                        speed=speed,
+                        num_step=num_step,
+                        chunk_index=chunk['index'],
+                        progress_cb=make_progress_cb(chunk)
+                    )
+                else:
+                    # Chế độ chạy local: Sử dụng model_lock để tránh xung đột CUDA context
+                    with self.model_lock:
+                        audio_data = loaded_model.generate(
+                            text=chunk['text'],
+                            language=language,
+                            ref_audio=ref_audio,
+                            ref_text=ref_text,
+                            instruct=instruct_str,
+                            speed=speed,
+                            num_step=num_step,
+                            progress_callback=make_progress_cb(chunk)
+                        )
+                    filename = f"chunk_{time.strftime('%Y%m%d_%H%M%S')}_{chunk['index']}.wav"
+                    filepath = os.path.join(temp_dir, filename)
+                    sf.write(filepath, audio_data[0], loaded_model.sampling_rate)
+                
+                chunk['status'] = "Hoàn thành"
+                chunk['file_path'] = filepath
+                
+                self.root.after(0, lambda c=chunk, path=filepath: self.tree_chunks.item(
+                    c['item_id'], 
+                    values=(c['index'], c['text'], "Hoàn thành", path)
+                ))
+                with success_counter_lock:
+                    success_count += 1
+                
+            except Exception as e:
+                chunk['status'] = "Lỗi"
+                self.root.after(0, lambda c=chunk: self.tree_chunks.item(
+                    c['item_id'], 
+                    values=(c['index'], c['text'], "Lỗi", "")
+                ))
+                self.log(f"Lỗi khi sinh đoạn {chunk['index']}: {e}", "ERROR")
+
+        # Sử dụng ThreadPoolExecutor để quản lý và phân phối các luồng xử lý
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            executor.map(process_chunk, failed_chunks)
+            
+        model_generating = False
+        self.log(f"Tiến trình tạo lại hoàn tất. Thành công: {success_count}/{len(failed_chunks)} đoạn.")
+        self.root.after(0, lambda: messagebox.showinfo("Thành công", f"Đã hoàn thành tạo lại các đoạn lỗi!\nThành công: {success_count}/{len(failed_chunks)} đoạn."))
 
     def play_selected_chunk(self):
         selected_item = self.tree_chunks.focus()
@@ -1865,6 +2100,12 @@ class OmniVoiceGUI:
             messagebox.showwarning("Cảnh báo", "Vui lòng chọn đường dẫn lưu file hoàn chỉnh!")
             return
             
+        # Chuẩn hóa đuôi file âm thanh (mặc định là .wav nếu người dùng nhập thiếu hoặc sai đuôi)
+        _, ext = os.path.splitext(dest_path)
+        if ext.lower() not in ['.wav', '.flac', '.ogg', '.mp3']:
+            dest_path += ".wav"
+            self.engine_dest_path.set(dest_path)
+            
         temp_files = []
         for chunk in self.chunks_data:
             if chunk['status'] == "Hoàn thành" and chunk['file_path'] and os.path.exists(chunk['file_path']):
@@ -1879,16 +2120,22 @@ class OmniVoiceGUI:
             if not ans:
                 return
                 
+        self.stop_audio_playback()  # Dừng phát thử để giải phóng file đang khóa
         self.log("Bắt đầu gộp các đoạn âm thanh thành file duy nhất...")
         
         import soundfile as sf
         import numpy as np
+        import gc
+        import time
         
         try:
             data_list = []
             sr = None
             for f in temp_files:
-                data, samplerate = sf.read(f)
+                # Sử dụng context manager SoundFile để đóng file descriptor ngay lập tức sau khi đọc
+                with sf.SoundFile(f) as sf_file:
+                    data = sf_file.read()
+                    samplerate = sf_file.samplerate
                 if sr is None:
                     sr = samplerate
                 data_list.append(data)
@@ -1900,19 +2147,39 @@ class OmniVoiceGUI:
                 self.log(f"Đã gộp thành công file hoàn chỉnh tại: {dest_path}")
                 messagebox.showinfo("Thành công", f"Đã gộp và xuất file thành công tại:\n{dest_path}")
                 
-                self.log("Đang dọn dẹp các tệp nhỏ tạm thời...")
-                for f in temp_files:
-                    try:
-                        os.remove(f)
-                    except Exception:
-                        pass
+                # Giải phóng dữ liệu âm thanh khỏi RAM
+                del data_list
+                del combined
                 
-                for chunk in self.chunks_data:
-                    if chunk['file_path'] in temp_files:
-                        chunk['file_path'] = None
-                        self.tree_chunks.item(chunk['item_id'], values=(chunk['index'], chunk['text'], chunk['status'], "Đã dọn dẹp"))
-                        
-                self.log("Đã dọn dẹp xong toàn bộ tệp tạm.")
+                if hasattr(self, 'delete_temp_after_merge_var') and self.delete_temp_after_merge_var.get():
+                    self.log("Đang chờ Windows giải phóng các tệp âm thanh tạm thời...")
+                    time.sleep(0.5)  # Tránh việc ffplay/winsound chưa tắt hẳn
+                    gc.collect()     # Dọn rác giải phóng handles
+                    
+                    self.log("Đang tiến hành dọn dẹp các tệp nhỏ tạm thời...")
+                    for f in temp_files:
+                        deleted = False
+                        for attempt in range(5):
+                            try:
+                                if os.path.exists(f):
+                                    os.remove(f)
+                                deleted = True
+                                break
+                            except Exception:
+                                self.log(f"Lần thử {attempt+1}: File tạm đang bị khóa, thử lại sau 0.3s...", "WARNING")
+                                time.sleep(0.3)
+                        if not deleted:
+                            self.log(f"Không thể xóa file tạm: {os.path.basename(f)} do Windows giữ khóa.", "WARNING")
+                    
+                    for chunk in self.chunks_data:
+                        if chunk['file_path'] in temp_files:
+                            if not os.path.exists(chunk['file_path']):
+                                chunk['file_path'] = None
+                                self.tree_chunks.item(chunk['item_id'], values=(chunk['index'], chunk['text'], chunk['status'], "Đã dọn dẹp"))
+                            
+                    self.log("Đã hoàn thành dọn dẹp các tệp tạm.")
+                else:
+                    self.log("Bỏ qua dọn dẹp file tạm theo cấu hình.")
                 
         except Exception as e:
             self.log(f"Lỗi khi gộp file: {e}", "ERROR")
