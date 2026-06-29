@@ -81,3 +81,21 @@ Khi tài khoản Colab/Kaggle hiện tại hết quota GPU miễn phí trong ng�
 2. Mở file notebook tương ứng (`OmniVoice_Colab_Server.ipynb` hoặc `OmniVoice_Kaggle_Server.ipynb`).
 3. Điền link GitHub của bạn và bấm chạy để nhận một đường link kết nối mới (dạng `https://yyyyyy.gradio.live`).
 4. Dán link mới này vào tab **"Cài đặt & Tải Model"** trên tool cục bộ của bạn, bấm **Lưu cấu hình** là có thể tiếp tục sử dụng ngay lập tức mà không cần tải lại source code thủ công.
+
+---
+
+## 🌐 HƯỚNG DẪN CẤU HÌNH NGROK ĐỂ SỬ DỤNG DOMAIN CỐ ĐỊNH (STATIC URL)
+
+Để tránh việc phải copy-paste lại địa chỉ URL mới mỗi khi khởi động lại máy chủ Colab/Kaggle, bạn có thể cấu hình ngrok kết hợp với một tên miền cố định miễn phí (ví dụ: `xxxx.ngrok-free.app`).
+
+### Các bước chuẩn bị tên miền cố định trên ngrok:
+1. Đăng ký hoặc đăng nhập tài khoản [ngrok.com](https://ngrok.com/).
+2. Vào mục **Your Authtoken** trên trang quản trị ngrok và sao chép mã Token cá nhân của bạn.
+3. Vào mục **Domains** -> Chọn **Create Domain** (ngrok cung cấp miễn phí 1 tên miền cố định dạng `xxxx.ngrok-free.app` cho mỗi tài khoản). Sao chép tên miền này.
+
+### Cách chạy trên Colab / Kaggle với ngrok:
+1. Tại ô mã lệnh **Bước 2: Khởi chạy API Server** trên giao diện Notebook Colab/Kaggle:
+   * Dán mã Token vào ô `NGROK_TOKEN`.
+   * Dán tên miền cố định vào ô `NGROK_DOMAIN`.
+2. Tiến hành chạy ô mã lệnh. Máy chủ sẽ tự động cài đặt gói hỗ trợ `pyngrok`, thiết lập kết nối an toàn và hiển thị địa chỉ cố định của bạn.
+3. Cấu hình địa chỉ cố định này (ví dụ: `https://xxxx.ngrok-free.app`) một lần duy nhất vào ô **Địa chỉ Cloud API Server** trên giao diện Tool GUI cục bộ. Từ các lần sau, bạn chỉ cần bật Server trên Colab/Kaggle lên là Tool có thể kết nối ngay lập tức mà không cần thay đổi địa chỉ kết nối nữa!

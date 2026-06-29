@@ -55,6 +55,38 @@ def load_model():
     except Exception as e:
         print(f"[!] Lỗi nghiêm trọng khi nạp mô hình: {e}")
 
+    # Khởi chạy ngrok nếu cấu hình qua biến môi trường
+    ngrok_token = os.environ.get("NGROK_TOKEN")
+    ngrok_domain = os.environ.get("NGROK_DOMAIN")
+    port = int(os.environ.get("PORT", "8000"))
+
+    if ngrok_token:
+        try:
+            from pyngrok import ngrok
+        except ImportError:
+            print("[*] Đang tự động cài đặt thư viện pyngrok...")
+            import subprocess
+            import sys
+            subprocess.run([sys.executable, "-m", "pip", "install", "pyngrok"], stdout=subprocess.DEVNULL)
+            from pyngrok import ngrok
+
+        try:
+            tunnels = ngrok.get_tunnels()
+            if not tunnels:
+                print("[*] Đang khởi tạo ngrok tunnel qua biến môi trường...")
+                ngrok.set_auth_token(ngrok_token)
+                if ngrok_domain:
+                    tunnel = ngrok.connect(port, "http", domain=ngrok_domain)
+                else:
+                    tunnel = ngrok.connect(port, "http")
+                print("\n" + "="*80)
+                print(f"[SUCCESS] Ngrok Tunnel đã được thiết lập thành công!")
+                print(f"Địa chỉ ngrok cố định (API): {tunnel.public_url}")
+                print("="*80 + "\n")
+        except Exception as e:
+            print(f"[!] Lỗi khởi chạy ngrok trong sự kiện startup: {e}")
+
+
 @app.get("/")
 def read_root():
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -146,3 +178,27 @@ async def api_generate(
     except Exception as e:
         print(f"[!] Lỗi trong quá trình sinh âm thanh: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == "__main__":
+    import argparse
+    import uvicorn
+    import sys
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--host", type=str, default="0.0.0.0")
+    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--ngrok_token", type=str, default=os.environ.get("NGROK_TOKEN"))
+    parser.add_argument("--ngrok_domain", type=str, default=os.environ.get("NGROK_DOMAIN"))
+    args = parser.parse_args()
+
+    # Cấu hình biến môi trường từ tham số dòng lệnh
+    if args.ngrok_token:
+        os.environ["NGROK_TOKEN"] = args.ngrok_token
+    if args.ngrok_domain:
+        os.environ["NGROK_DOMAIN"] = args.ngrok_domain
+    os.environ["PORT"] = str(args.port)
+
+    # Chạy uvicorn trực tiếp
+    print(f"[*] Đang khởi chạy máy chủ FastAPI trên {args.host}:{args.port}...")
+    uvicorn.run("app:app", host=args.host, port=args.port)
+

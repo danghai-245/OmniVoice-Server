@@ -902,19 +902,21 @@ class OmniVoiceGUI:
         f_tree = ttk.Frame(left_col)
         f_tree.pack(fill=tk.BOTH, expand=True)
         
-        columns = ("stt", "content", "status", "file")
+        columns = ("stt", "content", "status", "take", "file")
         self.tree_chunks = ttk.Treeview(f_tree, columns=columns, show="headings", height=8)
         
         # Cho phép nhấn vào tiêu đề để sắp xếp
         self.tree_chunks.heading("stt", text="STT", command=lambda: self.sort_treeview_column("stt", False))
         self.tree_chunks.heading("content", text="Nội dung đoạn", command=lambda: self.sort_treeview_column("content", False))
         self.tree_chunks.heading("status", text="Trạng thái", command=lambda: self.sort_treeview_column("status", False))
+        self.tree_chunks.heading("take", text="Bản chọn (Take)", command=lambda: self.sort_treeview_column("take", False))
         self.tree_chunks.heading("file", text="Đường dẫn file tạm", command=lambda: self.sort_treeview_column("file", False))
         
-        self.tree_chunks.column("stt", width=45, minwidth=40, anchor=tk.CENTER)
-        self.tree_chunks.column("content", width=320, minwidth=250, anchor=tk.W)
-        self.tree_chunks.column("status", width=95, minwidth=80, anchor=tk.CENTER)
-        self.tree_chunks.column("file", width=120, minwidth=100, anchor=tk.W)
+        self.tree_chunks.column("stt", width=40, minwidth=35, anchor=tk.CENTER)
+        self.tree_chunks.column("content", width=260, minwidth=180, anchor=tk.W)
+        self.tree_chunks.column("status", width=85, minwidth=70, anchor=tk.CENTER)
+        self.tree_chunks.column("take", width=95, minwidth=80, anchor=tk.CENTER)
+        self.tree_chunks.column("file", width=120, minwidth=90, anchor=tk.W)
         
         vsb = ttk.Scrollbar(f_tree, orient="vertical", command=self.tree_chunks.yview)
         self.tree_chunks.configure(yscrollcommand=vsb.set)
@@ -924,6 +926,7 @@ class OmniVoiceGUI:
         
         # Double click to play
         self.tree_chunks.bind("<Double-1>", lambda event: self.play_selected_chunk())
+        self.tree_chunks.bind("<<TreeviewSelect>>", self.on_chunk_selected)
         
         # Các nút thao tác trên treeview (tất cả trên 1 hàng ngang, text rút gọn để hiển thị đầy đủ)
         f_actions = ttk.Frame(left_col, padding=5)
@@ -946,6 +949,18 @@ class OmniVoiceGUI:
         
         self.btn_engine_stop = ttk.Button(f_actions, text="⏹️ Dừng", style="Stop.TButton", command=self.stop_audio_playback)
         self.btn_engine_stop.pack(side=tk.LEFT, padx=3)
+        
+        # Hàng quản lý Bản chọn (Takes) dưới hàng actions
+        f_take_actions = ttk.Frame(left_col, padding=5)
+        f_take_actions.pack(fill=tk.X, pady=(2, 0))
+        
+        ttk.Label(f_take_actions, text="Chọn phiên bản đọc (Take):", font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=(3, 5))
+        self.combo_engine_takes = ttk.Combobox(f_take_actions, state="readonly", width=12)
+        self.combo_engine_takes.pack(side=tk.LEFT, padx=3)
+        self.combo_engine_takes.bind("<<ComboboxSelected>>", self.on_take_selected)
+        
+        self.btn_engine_del_take = ttk.Button(f_take_actions, text="🗑️ Xóa Take", command=self.delete_selected_take)
+        self.btn_engine_del_take.pack(side=tk.LEFT, padx=10)
         
         # --- CỘT PHẢI: Cấu hình giọng & Xuất file ---
         # 1. Chọn giọng đọc tham chiếu (Voice Clone)
@@ -1015,9 +1030,43 @@ class OmniVoiceGUI:
         self.engine_steps_var = tk.IntVar(value=32)
         self.engine_steps_slider = ttk.Scale(f_steps, from_=4, to=64, variable=self.engine_steps_var, orient=tk.HORIZONTAL)
         self.engine_steps_slider.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
-        self.lbl_engine_steps_val = ttk.Label(f_steps, text="32", font=("Segoe UI", 9, "bold"), foreground="#00ADB5", width=4)
-        self.lbl_engine_steps_val.pack(side=tk.RIGHT)
-        self.engine_steps_var.trace_add("write", lambda *args: self.lbl_engine_steps_val.configure(text=f"{int(self.engine_steps_var.get())}"))
+        
+        # Thiết lập Entry nhập tay cho Steps
+        self.ent_engine_steps_val = ttk.Entry(f_steps, width=6, justify=tk.CENTER)
+        self.ent_engine_steps_val.pack(side=tk.RIGHT)
+        self.ent_engine_steps_val.insert(0, "32")
+        
+        self.steps_trace_id = None
+        def on_steps_slider_changed(*args):
+            try:
+                val = int(self.engine_steps_var.get())
+                self.ent_engine_steps_val.delete(0, tk.END)
+                self.ent_engine_steps_val.insert(0, str(val))
+            except Exception:
+                pass
+                
+        self.steps_trace_id = self.engine_steps_var.trace_add("write", on_steps_slider_changed)
+        
+        def on_steps_entry_enter(event):
+            try:
+                val = int(self.ent_engine_steps_val.get().strip())
+                if val < 4:
+                    val = 4
+                elif val > 64:
+                    val = 64
+                
+                # Tạm thời gỡ trace để tránh loop
+                self.engine_steps_var.trace_remove("write", self.steps_trace_id)
+                self.engine_steps_var.set(val)
+                self.steps_trace_id = self.engine_steps_var.trace_add("write", on_steps_slider_changed)
+                
+                self.ent_engine_steps_val.delete(0, tk.END)
+                self.ent_engine_steps_val.insert(0, str(val))
+                self.root.focus()
+            except ValueError:
+                on_steps_slider_changed()
+                
+        self.ent_engine_steps_val.bind("<Return>", on_steps_entry_enter)
 
         ttk.Label(grid_config, text="Tốc độ đọc (Speed):").grid(row=4, column=1, sticky=tk.W, pady=(2, 2))
         f_speed = ttk.Frame(grid_config)
@@ -1026,9 +1075,123 @@ class OmniVoiceGUI:
         self.engine_speed_var = tk.DoubleVar(value=1.0)
         self.engine_speed_slider = ttk.Scale(f_speed, from_=0.5, to=1.5, variable=self.engine_speed_var, orient=tk.HORIZONTAL)
         self.engine_speed_slider.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
-        self.lbl_engine_speed_val = ttk.Label(f_speed, text="1.00x", font=("Segoe UI", 9, "bold"), foreground="#00ADB5", width=6)
-        self.lbl_engine_speed_val.pack(side=tk.RIGHT)
-        self.engine_speed_var.trace_add("write", lambda *args: self.lbl_engine_speed_val.configure(text=f"{self.engine_speed_var.get():.2f}x"))
+        
+        # Thiết lập Entry nhập tay cho Speed
+        self.ent_engine_speed_val = ttk.Entry(f_speed, width=7, justify=tk.CENTER)
+        self.ent_engine_speed_val.pack(side=tk.RIGHT)
+        self.ent_engine_speed_val.insert(0, "1.00x")
+        
+        self.speed_trace_id = None
+        def on_speed_slider_changed(*args):
+            try:
+                val = self.engine_speed_var.get()
+                self.ent_engine_speed_val.delete(0, tk.END)
+                self.ent_engine_speed_val.insert(0, f"{val:.2f}x")
+            except Exception:
+                pass
+                
+        self.speed_trace_id = self.engine_speed_var.trace_add("write", on_speed_slider_changed)
+        
+        def on_speed_entry_enter(event):
+            try:
+                val_str = self.ent_engine_speed_val.get().strip().replace("x", "")
+                val = float(val_str)
+                if val < 0.5:
+                    val = 0.5
+                elif val > 1.5:
+                    val = 1.5
+                
+                # Tạm thời gỡ trace để tránh loop
+                self.engine_speed_var.trace_remove("write", self.speed_trace_id)
+                self.engine_speed_var.set(val)
+                self.speed_trace_id = self.engine_speed_var.trace_add("write", on_speed_slider_changed)
+                
+                self.ent_engine_speed_val.delete(0, tk.END)
+                self.ent_engine_speed_val.insert(0, f"{val:.2f}x")
+                self.root.focus()
+            except ValueError:
+                on_speed_slider_changed()
+                
+        self.ent_engine_speed_val.bind("<Return>", on_speed_entry_enter)
+        
+        # Hàng 6, 7: Độ bám sát (CFG Scale) (Cột 0) và Độ biến hóa (Temperature) (Cột 1)
+        ttk.Label(grid_config, text="Độ bám sát giọng (CFG Scale):").grid(row=6, column=0, sticky=tk.W, pady=(2, 2), padx=(0, 10))
+        f_cfg = ttk.Frame(grid_config)
+        f_cfg.grid(row=7, column=0, sticky=tk.EW, pady=(0, 4), padx=(0, 10))
+        
+        self.engine_cfg_var = tk.DoubleVar(value=2.0)
+        self.engine_cfg_slider = ttk.Scale(f_cfg, from_=1.0, to=5.0, variable=self.engine_cfg_var, orient=tk.HORIZONTAL)
+        self.engine_cfg_slider.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        
+        self.ent_engine_cfg_val = ttk.Entry(f_cfg, width=6, justify=tk.CENTER)
+        self.ent_engine_cfg_val.pack(side=tk.RIGHT)
+        self.ent_engine_cfg_val.insert(0, "2.0")
+        
+        self.cfg_trace_id = None
+        def on_cfg_slider_changed(*args):
+            try:
+                val = self.engine_cfg_var.get()
+                self.ent_engine_cfg_val.delete(0, tk.END)
+                self.ent_engine_cfg_val.insert(0, f"{val:.1f}")
+            except Exception:
+                pass
+        self.cfg_trace_id = self.engine_cfg_var.trace_add("write", on_cfg_slider_changed)
+        
+        def on_cfg_entry_enter(event):
+            try:
+                val = float(self.ent_engine_cfg_val.get().strip())
+                if val < 1.0:
+                    val = 1.0
+                elif val > 5.0:
+                    val = 5.0
+                self.engine_cfg_var.trace_remove("write", self.cfg_trace_id)
+                self.engine_cfg_var.set(val)
+                self.cfg_trace_id = self.engine_cfg_var.trace_add("write", on_cfg_slider_changed)
+                self.ent_engine_cfg_val.delete(0, tk.END)
+                self.ent_engine_cfg_val.insert(0, f"{val:.1f}")
+                self.root.focus()
+            except ValueError:
+                on_cfg_slider_changed()
+        self.ent_engine_cfg_val.bind("<Return>", on_cfg_entry_enter)
+
+        ttk.Label(grid_config, text="Độ biến hóa (Temperature):").grid(row=6, column=1, sticky=tk.W, pady=(2, 2))
+        f_temp = ttk.Frame(grid_config)
+        f_temp.grid(row=7, column=1, sticky=tk.EW, pady=(0, 4))
+        
+        self.engine_temp_var = tk.DoubleVar(value=5.0)
+        self.engine_temp_slider = ttk.Scale(f_temp, from_=1.0, to=10.0, variable=self.engine_temp_var, orient=tk.HORIZONTAL)
+        self.engine_temp_slider.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        
+        self.ent_engine_temp_val = ttk.Entry(f_temp, width=7, justify=tk.CENTER)
+        self.ent_engine_temp_val.pack(side=tk.RIGHT)
+        self.ent_engine_temp_val.insert(0, "5.0")
+        
+        self.temp_trace_id = None
+        def on_temp_slider_changed(*args):
+            try:
+                val = self.engine_temp_var.get()
+                self.ent_engine_temp_val.delete(0, tk.END)
+                self.ent_engine_temp_val.insert(0, f"{val:.1f}")
+            except Exception:
+                pass
+        self.temp_trace_id = self.engine_temp_var.trace_add("write", on_temp_slider_changed)
+        
+        def on_temp_entry_enter(event):
+            try:
+                val = float(self.ent_engine_temp_val.get().strip())
+                if val < 1.0:
+                    val = 1.0
+                elif val > 10.0:
+                    val = 10.0
+                self.engine_temp_var.trace_remove("write", self.temp_trace_id)
+                self.engine_temp_var.set(val)
+                self.temp_trace_id = self.engine_temp_var.trace_add("write", on_temp_slider_changed)
+                self.ent_engine_temp_val.delete(0, tk.END)
+                self.ent_engine_temp_val.insert(0, f"{val:.1f}")
+                self.root.focus()
+            except ValueError:
+                on_temp_slider_changed()
+        self.ent_engine_temp_val.bind("<Return>", on_temp_entry_enter)
         
         # 3. Gộp & Xuất bản
         card_export = ttk.LabelFrame(right_col, text=" 📦 Gộp & Xuất bản tệp hoàn chỉnh ", padding=8)
@@ -1458,13 +1621,15 @@ class OmniVoiceGUI:
             
         self.chunks_data = []
         for i, chunk in enumerate(chunks, 1):
-            item_id = self.tree_chunks.insert("", tk.END, values=(i, chunk, "Chưa tạo", ""))
+            item_id = self.tree_chunks.insert("", tk.END, values=(i, chunk, "Chưa tạo", "-", ""))
             self.chunks_data.append({
                 'item_id': item_id,
                 'index': i,
                 'text': chunk,
                 'status': 'Chưa tạo',
-                'file_path': None
+                'file_path': None,
+                'takes': [],
+                'selected_take_index': -1
             })
             
         self.log(f"Đã chia văn bản thành {len(chunks)} đoạn thành công.")
@@ -1626,7 +1791,7 @@ class OmniVoiceGUI:
 
         return ref_audio, ref_text, instruct_str
 
-    def _call_cloud_api(self, text, language, ref_audio, ref_text, instruct_str, speed, num_step, chunk_index=None, progress_cb=None):
+    def _call_cloud_api(self, text, language, ref_audio, ref_text, instruct_str, speed, num_step, cfg_scale=2.0, temperature=5.0, chunk_index=None, progress_cb=None):
         from gradio_client import Client, handle_file
         import shutil
         
@@ -1651,13 +1816,15 @@ class OmniVoiceGUI:
             self.log(f"Đang gửi yêu cầu sinh giọng nói tới Cloud Server...")
             
             result = client.predict(
-                text=text,
-                language=language or "Auto",
-                ref_audio_path=ref_file_param,
-                ref_text=ref_text or "",
-                instruct=instruct_str or "Auto",
-                speed=float(speed),
-                num_step=int(num_step),
+                text,
+                language or "Auto",
+                ref_file_param,
+                ref_text or "",
+                instruct_str or "Auto",
+                float(speed),
+                int(num_step),
+                float(cfg_scale),
+                float(temperature),
                 api_name="/generate"
             )
             
@@ -1686,18 +1853,29 @@ class OmniVoiceGUI:
     def generate_chunk_worker(self, chunk_info, raw_ref_audio, raw_ref_text, raw_pitch, raw_style, raw_voice_combo):
         global loaded_model, model_generating
         import soundfile as sf
+        import shutil
         
         lang = self.engine_lang_var.get()
         language = lang if lang != "Auto" else None
         speed = float(self.engine_speed_var.get())
         num_step = int(self.engine_steps_var.get())
+        cfg_scale = float(self.engine_cfg_var.get())
+        temperature = float(self.engine_temp_var.get())
         
+        # Tiền xử lý chuẩn hóa chữ số/ký tự tiếng Việt
+        try:
+            from omnivoice.utils.vietnamese_normalizer import normalize_vietnamese_text
+            norm_text = normalize_vietnamese_text(chunk_info['text'])
+        except Exception as e:
+            self.log(f"Không nạp được bộ chuẩn hóa tiếng Việt: {e}. Dùng văn bản gốc.", "WARNING")
+            norm_text = chunk_info['text']
+            
         # Giải quyết các tham số tham chiếu và phong cách an toàn trong luồng phụ
         ref_audio, ref_text, instruct_str = self._resolve_engine_parameters(
             raw_ref_audio, raw_ref_text, raw_pitch, raw_style, raw_voice_combo
         )
         
-        self.log(f"Đang sinh đoạn {chunk_info['index']}...")
+        self.log(f"Đang sinh đoạn {chunk_info['index']} (Chuẩn hóa: \"{norm_text[:40]}...\")...")
         
         temp_dir = os.path.join(output_dir, "temp_chunks")
         os.makedirs(temp_dir, exist_ok=True)
@@ -1705,52 +1883,73 @@ class OmniVoiceGUI:
         try:
             def progress_cb(step, total_steps):
                 pct = int(step / total_steps * 100)
+                # Đảm bảo hiển thị đúng số cột (5 cột)
+                take_val = f"Take {chunk_info['selected_take_index'] + 1}/{len(chunk_info['takes'])}" if ('takes' in chunk_info and chunk_info['takes']) else "-"
                 self.root.after(0, lambda: self.tree_chunks.item(
                     chunk_info['item_id'], 
-                    values=(chunk_info['index'], chunk_info['text'], f"Đang xử lý ({pct}%)", "")
+                    values=(chunk_info['index'], chunk_info['text'], f"Đang xử lý ({pct}%)", take_val, "")
                 ))
 
+            # Xác định số thứ tự Take tiếp theo
+            if 'takes' not in chunk_info:
+                chunk_info['takes'] = []
+                chunk_info['selected_take_index'] = -1
+                
+            take_num = len(chunk_info['takes']) + 1
+            filename = f"chunk_{time.strftime('%Y%m%d_%H%M%S')}_{chunk_info['index']}_take{take_num}.wav"
+            filepath = os.path.join(temp_dir, filename)
+
             if "Cloud API" in self.run_mode_var.get():
-                filepath = self._call_cloud_api(
-                    text=chunk_info['text'],
+                temp_filepath = self._call_cloud_api(
+                    text=norm_text,
                     language=language,
                     ref_audio=ref_audio,
                     ref_text=ref_text,
                     instruct_str=instruct_str,
                     speed=speed,
                     num_step=num_step,
+                    cfg_scale=cfg_scale,
+                    temperature=temperature,
                     chunk_index=chunk_info['index'],
                     progress_cb=progress_cb
                 )
+                shutil.move(temp_filepath, filepath)
             else:
                 audio_data = loaded_model.generate(
-                    text=chunk_info['text'],
+                    text=norm_text,
                     language=language,
                     ref_audio=ref_audio,
                     ref_text=ref_text,
                     instruct=instruct_str,
                     speed=speed,
                     num_step=num_step,
+                    guidance_scale=cfg_scale,
+                    position_temperature=temperature,
                     progress_callback=progress_cb
                 )
-                filename = f"chunk_{time.strftime('%Y%m%d_%H%M%S')}_{chunk_info['index']}.wav"
-                filepath = os.path.join(temp_dir, filename)
                 sf.write(filepath, audio_data[0], loaded_model.sampling_rate)
             
-            chunk_info['status'] = "Hoàn thành"
+            chunk_info['takes'].append(filepath)
+            chunk_info['selected_take_index'] = len(chunk_info['takes']) - 1
             chunk_info['file_path'] = filepath
+            chunk_info['status'] = "Hoàn thành"
+            
+            take_text = f"Take {chunk_info['selected_take_index'] + 1}/{len(chunk_info['takes'])}"
             
             self.root.after(0, lambda: self.tree_chunks.item(
                 chunk_info['item_id'], 
-                values=(chunk_info['index'], chunk_info['text'], "Hoàn thành", filepath)
+                values=(chunk_info['index'], chunk_info['text'], "Hoàn thành", take_text, filepath)
             ))
-            self.log(f"Đã sinh xong đoạn {chunk_info['index']} -> {filename}")
+            # Cập nhật Combobox và log
+            self.root.after(0, self.on_chunk_selected)
+            self.log(f"Đã sinh xong đoạn {chunk_info['index']} (Take {take_num}) -> {filename}")
             
         except Exception as e:
             chunk_info['status'] = "Lỗi"
+            take_val = f"Take {chunk_info['selected_take_index'] + 1}/{len(chunk_info['takes'])}" if ('takes' in chunk_info and chunk_info['takes']) else "-"
             self.root.after(0, lambda: self.tree_chunks.item(
                 chunk_info['item_id'], 
-                values=(chunk_info['index'], chunk_info['text'], "Lỗi", "")
+                values=(chunk_info['index'], chunk_info['text'], "Lỗi", take_val, "")
             ))
             self.log(f"Lỗi khi sinh đoạn {chunk_info['index']}: {e}", "ERROR")
             
@@ -1803,11 +2002,14 @@ class OmniVoiceGUI:
         import soundfile as sf
         from concurrent.futures import ThreadPoolExecutor
         import threading
+        import shutil
         
         lang = self.engine_lang_var.get()
         language = lang if lang != "Auto" else None
         speed = float(self.engine_speed_var.get())
         num_step = int(self.engine_steps_var.get())
+        cfg_scale = float(self.engine_cfg_var.get())
+        temperature = float(self.engine_temp_var.get())
         
         # Lấy số luồng tối đa được cấu hình trên giao diện
         try:
@@ -1829,65 +2031,93 @@ class OmniVoiceGUI:
         success_count = 0
         
         def process_chunk(chunk):
+            take_val = f"Take {chunk['selected_take_index'] + 1}/{len(chunk['takes'])}" if ('takes' in chunk and chunk['takes']) else "-"
             if self.stop_generating_flag:
                 chunk['status'] = "Chưa tạo"
-                self.root.after(0, lambda c=chunk: self.tree_chunks.item(c['item_id'], values=(c['index'], c['text'], "Chưa tạo", "")))
+                self.root.after(0, lambda c=chunk, tk_v=take_val: self.tree_chunks.item(c['item_id'], values=(c['index'], c['text'], "Chưa tạo", tk_v, "")))
                 return
             nonlocal success_count
             chunk['status'] = "Đang xử lý..."
-            self.root.after(0, lambda c=chunk: self.tree_chunks.item(c['item_id'], values=(c['index'], c['text'], "Đang xử lý...", "")))
+            self.root.after(0, lambda c=chunk, tk_v=take_val: self.tree_chunks.item(c['item_id'], values=(c['index'], c['text'], "Đang xử lý...", tk_v, "")))
             
+            # Tiền xử lý chuẩn hóa tiếng Việt
+            try:
+                from omnivoice.utils.vietnamese_normalizer import normalize_vietnamese_text
+                norm_text = normalize_vietnamese_text(chunk['text'])
+            except Exception:
+                norm_text = chunk['text']
+                
             try:
                 def make_progress_cb(ch):
+                    tk_v2 = f"Take {ch['selected_take_index'] + 1}/{len(ch['takes'])}" if ('takes' in ch and ch['takes']) else "-"
                     return lambda step, total_steps: self.root.after(0, lambda: self.tree_chunks.item(
                         ch['item_id'], 
-                        values=(ch['index'], ch['text'], f"Đang xử lý ({int(step / total_steps * 100)}%)", "")
+                        values=(ch['index'], ch['text'], f"Đang xử lý ({int(step / total_steps * 100)}%)", tk_v2, "")
                     ))
 
+                # Xác định file và số take tiếp theo
+                if 'takes' not in chunk:
+                    chunk['takes'] = []
+                    chunk['selected_take_index'] = -1
+                take_num = len(chunk['takes']) + 1
+                filename = f"chunk_{time.strftime('%Y%m%d_%H%M%S')}_{chunk['index']}_take{take_num}.wav"
+                filepath = os.path.join(temp_dir, filename)
+
                 if "Cloud API" in self.run_mode_var.get():
-                    filepath = self._call_cloud_api(
-                        text=chunk['text'],
+                    temp_filepath = self._call_cloud_api(
+                        text=norm_text,
                         language=language,
                         ref_audio=ref_audio,
                         ref_text=ref_text,
                         instruct_str=instruct_str,
                         speed=speed,
                         num_step=num_step,
+                        cfg_scale=cfg_scale,
+                        temperature=temperature,
                         chunk_index=chunk['index'],
                         progress_cb=make_progress_cb(chunk)
                     )
+                    shutil.move(temp_filepath, filepath)
                 else:
                     # Chế độ chạy local: Sử dụng model_lock để tránh xung đột CUDA context
                     with self.model_lock:
                         audio_data = loaded_model.generate(
-                            text=chunk['text'],
+                            text=norm_text,
                             language=language,
                             ref_audio=ref_audio,
                             ref_text=ref_text,
                             instruct=instruct_str,
                             speed=speed,
                             num_step=num_step,
+                            guidance_scale=cfg_scale,
+                            position_temperature=temperature,
                             progress_callback=make_progress_cb(chunk)
                         )
-                    filename = f"chunk_{time.strftime('%Y%m%d_%H%M%S')}_{chunk['index']}.wav"
-                    filepath = os.path.join(temp_dir, filename)
                     sf.write(filepath, audio_data[0], loaded_model.sampling_rate)
                 
+                chunk['takes'].append(filepath)
+                chunk['selected_take_index'] = len(chunk['takes']) - 1
                 chunk['status'] = "Hoàn thành"
                 chunk['file_path'] = filepath
                 
-                self.root.after(0, lambda c=chunk, path=filepath: self.tree_chunks.item(
+                take_text = f"Take {chunk['selected_take_index'] + 1}/{len(chunk['takes'])}"
+                
+                self.root.after(0, lambda c=chunk, path=filepath, tk_t=take_text: self.tree_chunks.item(
                     c['item_id'], 
-                    values=(c['index'], c['text'], "Hoàn thành", path)
+                    values=(c['index'], c['text'], "Hoàn thành", tk_t, path)
                 ))
                 with success_counter_lock:
                     success_count += 1
                 
+                # Cập nhật Combobox nếu dòng này đang chọn
+                self.root.after(0, self.on_chunk_selected)
+                
             except Exception as e:
                 chunk['status'] = "Lỗi"
-                self.root.after(0, lambda c=chunk: self.tree_chunks.item(
+                tk_v3 = f"Take {chunk['selected_take_index'] + 1}/{len(chunk['takes'])}" if ('takes' in chunk and chunk['takes']) else "-"
+                self.root.after(0, lambda c=chunk, tk_v=tk_v3: self.tree_chunks.item(
                     c['item_id'], 
-                    values=(c['index'], c['text'], "Lỗi", "")
+                    values=(c['index'], c['text'], "Lỗi", tk_v, "")
                 ))
                 self.log(f"Lỗi khi sinh đoạn {chunk['index']}: {e}", "ERROR")
 
@@ -1917,6 +2147,108 @@ class OmniVoiceGUI:
             
         # Gán lại callback cho tiêu đề với reverse ngược lại cho click tiếp theo
         self.tree_chunks.heading(col, command=lambda: self.sort_treeview_column(col, not reverse))
+
+    def on_chunk_selected(self, event=None):
+        selected_item = self.tree_chunks.focus()
+        if not selected_item:
+            self.combo_engine_takes.configure(values=[])
+            self.combo_engine_takes.set("")
+            return
+            
+        chunk = None
+        for c in self.chunks_data:
+            if c['item_id'] == selected_item:
+                chunk = c
+                break
+                
+        if chunk and 'takes' in chunk and chunk['takes']:
+            take_options = [f"Take {i+1}" for i in range(len(chunk['takes']))]
+            self.combo_engine_takes.configure(values=take_options)
+            self.combo_engine_takes.set(f"Take {chunk['selected_take_index'] + 1}")
+        else:
+            self.combo_engine_takes.configure(values=[])
+            self.combo_engine_takes.set("")
+
+    def on_take_selected(self, event=None):
+        selected_item = self.tree_chunks.focus()
+        if not selected_item:
+            return
+            
+        chunk = None
+        for c in self.chunks_data:
+            if c['item_id'] == selected_item:
+                chunk = c
+                break
+                
+        if chunk and 'takes' in chunk and chunk['takes']:
+            sel_str = self.combo_engine_takes.get()
+            try:
+                idx = int(sel_str.replace("Take ", "")) - 1
+                if 0 <= idx < len(chunk['takes']):
+                    chunk['selected_take_index'] = idx
+                    chunk['file_path'] = chunk['takes'][idx]
+                    
+                    take_text = f"Take {idx + 1}/{len(chunk['takes'])}"
+                    self.tree_chunks.item(
+                        chunk['item_id'],
+                        values=(chunk['index'], chunk['text'], chunk['status'], take_text, chunk['file_path'])
+                    )
+                    self.log(f"Đã chuyển sang {sel_str} cho đoạn {chunk['index']}")
+            except Exception as e:
+                pass
+
+    def delete_selected_take(self):
+        selected_item = self.tree_chunks.focus()
+        if not selected_item:
+            messagebox.showwarning("Cảnh báo", "Vui lòng chọn một đoạn trong bảng danh sách trước!")
+            return
+            
+        chunk = None
+        for c in self.chunks_data:
+            if c['item_id'] == selected_item:
+                chunk = c
+                break
+                
+        if not chunk or 'takes' not in chunk or not chunk['takes']:
+            messagebox.showinfo("Thông báo", "Đoạn này chưa có phiên bản nào được tạo!")
+            return
+            
+        idx = chunk['selected_take_index']
+        filepath = chunk['takes'][idx]
+        
+        # Xóa file thực tế trên đĩa
+        if os.path.exists(filepath):
+            try:
+                os.remove(filepath)
+            except Exception as e:
+                self.log(f"Không thể xóa file {os.path.basename(filepath)}: {e}", "WARNING")
+                
+        # Xóa khỏi danh sách takes
+        chunk['takes'].pop(idx)
+        
+        if not chunk['takes']:
+            chunk['selected_take_index'] = -1
+            chunk['file_path'] = None
+            chunk['status'] = "Chưa tạo"
+            take_text = "-"
+            status_text = "Chưa tạo"
+            file_text = ""
+        else:
+            # Chuyển focus sang take cuối cùng còn lại
+            chunk['selected_take_index'] = len(chunk['takes']) - 1
+            chunk['file_path'] = chunk['takes'][-1]
+            take_text = f"Take {chunk['selected_take_index'] + 1}/{len(chunk['takes'])}"
+            status_text = chunk['status']
+            file_text = chunk['file_path']
+            
+        self.tree_chunks.item(
+            chunk['item_id'],
+            values=(chunk['index'], chunk['text'], status_text, take_text, file_text)
+        )
+        
+        # Cập nhật lại combo box
+        self.on_chunk_selected()
+        self.log(f"Đã xóa phiên bản Take {idx+1} của đoạn {chunk['index']}.")
 
     def stop_generating_voice(self):
         global model_generating
@@ -1976,11 +2308,14 @@ class OmniVoiceGUI:
         import soundfile as sf
         from concurrent.futures import ThreadPoolExecutor
         import threading
+        import shutil
         
         lang = self.engine_lang_var.get()
         language = lang if lang != "Auto" else None
         speed = float(self.engine_speed_var.get())
         num_step = int(self.engine_steps_var.get())
+        cfg_scale = float(self.engine_cfg_var.get())
+        temperature = float(self.engine_temp_var.get())
         
         # Lấy số luồng tối đa được cấu hình trên giao diện
         try:
@@ -2002,65 +2337,93 @@ class OmniVoiceGUI:
         success_count = 0
         
         def process_chunk(chunk):
+            take_val = f"Take {chunk['selected_take_index'] + 1}/{len(chunk['takes'])}" if ('takes' in chunk and chunk['takes']) else "-"
             if self.stop_generating_flag:
                 chunk['status'] = "Lỗi"
-                self.root.after(0, lambda c=chunk: self.tree_chunks.item(c['item_id'], values=(c['index'], c['text'], "Lỗi", "")))
+                self.root.after(0, lambda c=chunk, tk_v=take_val: self.tree_chunks.item(c['item_id'], values=(c['index'], c['text'], "Lỗi", tk_v, "")))
                 return
             nonlocal success_count
             chunk['status'] = "Đang xử lý..."
-            self.root.after(0, lambda c=chunk: self.tree_chunks.item(c['item_id'], values=(c['index'], c['text'], "Đang xử lý...", "")))
+            self.root.after(0, lambda c=chunk, tk_v=take_val: self.tree_chunks.item(c['item_id'], values=(c['index'], c['text'], "Đang xử lý...", tk_v, "")))
             
+            # Tiền xử lý chuẩn hóa tiếng Việt
+            try:
+                from omnivoice.utils.vietnamese_normalizer import normalize_vietnamese_text
+                norm_text = normalize_vietnamese_text(chunk['text'])
+            except Exception:
+                norm_text = chunk['text']
+                
             try:
                 def make_progress_cb(ch):
+                    tk_v2 = f"Take {ch['selected_take_index'] + 1}/{len(ch['takes'])}" if ('takes' in ch and ch['takes']) else "-"
                     return lambda step, total_steps: self.root.after(0, lambda: self.tree_chunks.item(
                         ch['item_id'], 
-                        values=(ch['index'], ch['text'], f"Đang xử lý ({int(step / total_steps * 100)}%)", "")
+                        values=(ch['index'], ch['text'], f"Đang xử lý ({int(step / total_steps * 100)}%)", tk_v2, "")
                     ))
 
+                # Xác định file và số take tiếp theo
+                if 'takes' not in chunk:
+                    chunk['takes'] = []
+                    chunk['selected_take_index'] = -1
+                take_num = len(chunk['takes']) + 1
+                filename = f"chunk_{time.strftime('%Y%m%d_%H%M%S')}_{chunk['index']}_take{take_num}.wav"
+                filepath = os.path.join(temp_dir, filename)
+
                 if "Cloud API" in self.run_mode_var.get():
-                    filepath = self._call_cloud_api(
-                        text=chunk['text'],
+                    temp_filepath = self._call_cloud_api(
+                        text=norm_text,
                         language=language,
                         ref_audio=ref_audio,
                         ref_text=ref_text,
                         instruct_str=instruct_str,
                         speed=speed,
                         num_step=num_step,
+                        cfg_scale=cfg_scale,
+                        temperature=temperature,
                         chunk_index=chunk['index'],
                         progress_cb=make_progress_cb(chunk)
                     )
+                    shutil.move(temp_filepath, filepath)
                 else:
                     # Chế độ chạy local: Sử dụng model_lock để tránh xung đột CUDA context
                     with self.model_lock:
                         audio_data = loaded_model.generate(
-                            text=chunk['text'],
+                            text=norm_text,
                             language=language,
                             ref_audio=ref_audio,
                             ref_text=ref_text,
                             instruct=instruct_str,
                             speed=speed,
                             num_step=num_step,
+                            guidance_scale=cfg_scale,
+                            position_temperature=temperature,
                             progress_callback=make_progress_cb(chunk)
                         )
-                    filename = f"chunk_{time.strftime('%Y%m%d_%H%M%S')}_{chunk['index']}.wav"
-                    filepath = os.path.join(temp_dir, filename)
                     sf.write(filepath, audio_data[0], loaded_model.sampling_rate)
                 
+                chunk['takes'].append(filepath)
+                chunk['selected_take_index'] = len(chunk['takes']) - 1
                 chunk['status'] = "Hoàn thành"
                 chunk['file_path'] = filepath
                 
-                self.root.after(0, lambda c=chunk, path=filepath: self.tree_chunks.item(
+                take_text = f"Take {chunk['selected_take_index'] + 1}/{len(chunk['takes'])}"
+                
+                self.root.after(0, lambda c=chunk, path=filepath, tk_t=take_text: self.tree_chunks.item(
                     c['item_id'], 
-                    values=(c['index'], c['text'], "Hoàn thành", path)
+                    values=(c['index'], c['text'], "Hoàn thành", tk_t, path)
                 ))
                 with success_counter_lock:
                     success_count += 1
                 
+                # Cập nhật Combobox nếu dòng này đang chọn
+                self.root.after(0, self.on_chunk_selected)
+                
             except Exception as e:
                 chunk['status'] = "Lỗi"
-                self.root.after(0, lambda c=chunk: self.tree_chunks.item(
+                tk_v3 = f"Take {chunk['selected_take_index'] + 1}/{len(chunk['takes'])}" if ('takes' in chunk and chunk['takes']) else "-"
+                self.root.after(0, lambda c=chunk, tk_v=tk_v3: self.tree_chunks.item(
                     c['item_id'], 
-                    values=(c['index'], c['text'], "Lỗi", "")
+                    values=(c['index'], c['text'], "Lỗi", tk_v, "")
                 ))
                 self.log(f"Lỗi khi sinh đoạn {chunk['index']}: {e}", "ERROR")
 
@@ -2157,7 +2520,15 @@ class OmniVoiceGUI:
                     gc.collect()     # Dọn rác giải phóng handles
                     
                     self.log("Đang tiến hành dọn dẹp các tệp nhỏ tạm thời...")
-                    for f in temp_files:
+                    # Gom tất cả các take của các chunk để xóa sạch sẽ
+                    files_to_delete = []
+                    for chunk in self.chunks_data:
+                        if 'takes' in chunk:
+                            for tk_file in chunk['takes']:
+                                if os.path.exists(tk_file):
+                                    files_to_delete.append(tk_file)
+                                    
+                    for f in files_to_delete:
                         deleted = False
                         for attempt in range(5):
                             try:
@@ -2166,16 +2537,15 @@ class OmniVoiceGUI:
                                 deleted = True
                                 break
                             except Exception:
-                                self.log(f"Lần thử {attempt+1}: File tạm đang bị khóa, thử lại sau 0.3s...", "WARNING")
                                 time.sleep(0.3)
                         if not deleted:
                             self.log(f"Không thể xóa file tạm: {os.path.basename(f)} do Windows giữ khóa.", "WARNING")
                     
                     for chunk in self.chunks_data:
-                        if chunk['file_path'] in temp_files:
-                            if not os.path.exists(chunk['file_path']):
-                                chunk['file_path'] = None
-                                self.tree_chunks.item(chunk['item_id'], values=(chunk['index'], chunk['text'], chunk['status'], "Đã dọn dẹp"))
+                        chunk['takes'] = []
+                        chunk['selected_take_index'] = -1
+                        chunk['file_path'] = None
+                        self.tree_chunks.item(chunk['item_id'], values=(chunk['index'], chunk['text'], chunk['status'], "-", "Đã dọn dẹp"))
                             
                     self.log("Đã hoàn thành dọn dẹp các tệp tạm.")
                 else:
