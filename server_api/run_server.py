@@ -207,45 +207,12 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument("--ngrok_token", type=str, default=os.environ.get("NGROK_TOKEN"))
-    parser.add_argument("--ngrok_domain", type=str, default=os.environ.get("NGROK_DOMAIN"))
     args = parser.parse_args()
     
-    # Khởi chạy ngrok nếu có token
-    if args.ngrok_token:
-        try:
-            from pyngrok import ngrok
-        except ImportError:
-            print("[*] Đang tự động cài đặt thư viện pyngrok...")
-            import subprocess
-            subprocess.run([sys.executable, "-m", "pip", "install", "pyngrok"], stdout=subprocess.DEVNULL)
-            from pyngrok import ngrok
-        
-        try:
-            print("[*] Đang khởi tạo ngrok tunnel...")
-            ngrok.set_auth_token(args.ngrok_token)
-            
-            # Đóng các tunnel cũ để tránh lỗi số lượng tunnel tối đa của ngrok
-            tunnels = ngrok.get_tunnels()
-            for t in tunnels:
-                ngrok.disconnect(t.public_url)
-                
-            if args.ngrok_domain:
-                tunnel = ngrok.connect(args.port, "http", domain=args.ngrok_domain)
-            else:
-                tunnel = ngrok.connect(args.port, "http")
-                
-            print("\n" + "="*80)
-            print(f"[SUCCESS] Ngrok Tunnel đã được thiết lập thành công!")
-            print(f"Địa chỉ ngrok cố định (Gradio): {tunnel.public_url}")
-            print("="*80 + "\n")
-        except Exception as e:
-            print(f"[!] Lỗi khởi chạy ngrok: {e}")
-            
-    print("[*] Đang khởi chạy máy chủ Gradio...")
-    # Khởi chạy Gradio với share=True để tạo link public miễn phí (nếu không dùng ngrok)
+    print("[*] Đang khởi chạy máy chủ Gradio Tunnel...")
+    # Khởi chạy Gradio với share=True để tạo link public miễn phí
     demo.launch(
-        share=False if args.ngrok_token else True, 
+        share=True, 
         server_name="0.0.0.0", 
         server_port=args.port
     )
