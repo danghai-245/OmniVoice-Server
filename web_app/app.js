@@ -702,16 +702,17 @@ async function processSingleChunk(idx, workerId = 0) {
 
         let response = null;
         let lastError = null;
+        const startTime = Date.now();
 
-        for (let retry = 0; retry < 2; retry++) {
+        for (let retry = 0; retry < 4; retry++) {
             try {
                 if (retry > 0) {
-                    addAppLog(`[Thử lại ${retry}/1] Đang thử kết nối tới server GPU dự phòng cho Đoạn ${item.id}...`);
+                    addAppLog(`[Đang đánh thức GPU / Thử lại ${retry}/3] Đang kết nối tới GPU cho Đoạn ${item.id}...`);
                     // Đổi server GPU dự phòng khi retry
                     if (modalGpuUrls && modalGpuUrls.length > 1) {
                         gpuUrl = modalGpuUrls[(idx + workerId + retry) % modalGpuUrls.length];
                     }
-                    await new Promise(r => setTimeout(r, 600));
+                    await new Promise(r => setTimeout(r, 3000));
                 }
 
                 response = await fetch(gpuUrl, {
@@ -743,19 +744,33 @@ async function processSingleChunk(idx, workerId = 0) {
                         item.audioUrl = URL.createObjectURL(blob);
                         item.status = "done";
                         
-                        const renderDurationSec = Math.max(1.0, (Date.now() - startTime) / 1000);
-                        const costUsd = Math.max(0.0015, (renderDurationSec * 0.00035) + ((cleanText || item.text).length * 0.000005));
-                        trackGpuBillingUsage(gpuUrl, costUsd);
+                        try {
+                            const renderDurationSec = Math.max(1.0, (Date.now() - startTime) / 1000);
+                            const costUsd = Math.max(0.0015, (renderDurationSec * 0.00035) + ((cleanText || item.text).length * 0.000005));
+                            if (typeof trackGpuBillingUsage === "function") {
+                                trackGpuBillingUsage(gpuUrl, costUsd);
+                            }
 
-                        currentUser.used += item.text.length;
-                        if (usersDatabase.USERS[currentUser.username]) {
-                            usersDatabase.USERS[currentUser.username].used = currentUser.used;
+                            if (typeof currentUser !== "undefined" && currentUser && typeof currentUser.used === "number") {
+                                currentUser.used += item.text.length;
+                                if (typeof usersDatabase !== "undefined" && usersDatabase.USERS && usersDatabase.USERS[currentUser.username]) {
+                                    usersDatabase.USERS[currentUser.username].used = currentUser.used;
+                                }
+                                localStorage.setItem(`quota_used_${currentUser.username.toLowerCase()}`, currentUser.used);
+                                
+                                if (typeof syncUsersToGist === "function") {
+                                    syncUsersToGist().catch(e => console.warn("Lỗi sync quota:", e));
+                                }
+
+                                const quotaElem = document.getElementById("user-quota-display");
+                                if (quotaElem) {
+                                    quotaElem.innerText = `${currentUser.used.toLocaleString('vi-VN')} / ${currentUser.quota.toLocaleString('vi-VN')} ký tự`;
+                                }
+                            }
+                        } catch (quotaErr) {
+                            console.warn("Cảnh báo update quota UI:", quotaErr);
                         }
-                        localStorage.setItem(`quota_used_${currentUser.username.toLowerCase()}`, currentUser.used);
-                        
-                        syncUsersToGist().catch(e => console.warn("Lỗi sync quota Supabase:", e));
 
-                        document.getElementById("user-quota-display").innerText = `${currentUser.used.toLocaleString('vi-VN')} / ${currentUser.quota.toLocaleString('vi-VN')} ký tự`;
                         renderChunksTable();
                         addAppLog(`Đoạn ${item.id} tạo voice AI bằng máy chủ GPU THÀNH CÔNG 100%! (${(blob.size / 1024).toFixed(1)} KB)`);
                         return;
@@ -769,10 +784,15 @@ async function processSingleChunk(idx, workerId = 0) {
         throw new Error(lastError ? lastError.message : `HTTP Status ${response ? response.status : 'Unknown'} - GPU Server bận`);
     } catch (err) {
         console.error("Lỗi gọi Serverless GPU:", err);
-        item.status = "error";
+        if (item.audioUrl) {
+            item.status = "done";
+            addAppLog(`Đoạn ${item.id} đã tải audio thành công!`);
+        } else {
+            item.status = "error";
+            addAppLog(`Lỗi Đoạn ${item.id}: ${err.message}`);
+            showToast("Lỗi Tạo Voice", `Đoạn ${item.id} gặp sự cố: ${err.message}`, "error");
+        }
         renderChunksTable();
-        addAppLog(`Lỗi Đoạn ${item.id}: ${err.message}`);
-        showToast("Lỗi Tạo Voice", `Đoạn ${item.id} gặp sự cố: ${err.message}`, "error");
     }
 }
 
