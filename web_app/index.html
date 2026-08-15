@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTH Supper Voice Vip - Cỗ Máy Siêu Tạo Voice AI Cảm Xúc</title>
+    <meta name="description" content="HTH Supper Voice Vip - Cỗ máy siêu tạo voice AI cảm xúc đa ngôn ngữ chất lượng cao hàng đầu 2026.">
+    <link rel="icon" type="image/png" href="hth_logo.png">
+    <link rel="shortcut icon" type="image/x-icon" href="favicon.ico">
+    <link rel="apple-touch-icon" href="hth_logo.png">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- HEADER PRO BRANDING HTH SUPPER VOICE VIP VỚI LOGO CHÍNH THỨC -->
+    <header class="navbar">
+        <div class="logo-container">
+            <img src="hth_logo.png" alt="HTH Voice Logo" style="height: 38px; width: 38px; border-radius: 10px; margin-right: 10px; object-fit: cover; box-shadow: 0 0 14px rgba(0, 229, 255, 0.5);">
+            <span class="brand-title">HTH Supper Voice Vip</span>
+        </div>
+        <nav class="nav-menu" id="nav-links">
+            <a href="#hero-section"><i class="fa-solid fa-house"></i> Giới thiệu</a>
+            <a href="#features"><i class="fa-solid fa-bolt"></i> Tính năng</a>
+            <a href="#samples"><i class="fa-solid fa-sliders"></i> Mẫu giọng</a>
+        </nav>
+
+        <div class="user-badge-container hidden" id="user-badge">
+            <span class="user-name" id="user-name-display"><i class="fa-solid fa-user-check"></i> Đang tải...</span>
+            <span class="user-quota" id="user-quota-display">0 / 0 ký tự</span>
+            <button class="btn-admin-panel hidden" id="btn-admin-manage" onclick="openAdminModal()"><i class="fa-solid fa-crown"></i> Quản Lý User</button>
+            <button class="btn-logout" onclick="logout()"><i class="fa-solid fa-power-off"></i> Đăng xuất</button>
+        </div>
+
+        <button class="btn-accent hidden" id="btn-studio-trigger" onclick="openAuthModal(); return false;"><i class="fa-solid fa-wand-magic-sparkles"></i> Mở Studio</button>
+        <button class="btn-login" id="btn-login-trigger" onclick="openAuthModal(); return false;"><i class="fa-solid fa-right-to-bracket"></i> Đăng nhập</button>
+    </header>
+
+    <!-- MODAL ĐĂNG NHẬP (ƯU TIÊN VỊ TRÍ TOP HÀNG ĐẦU DOM CHỐNG CHE PHỦ) -->
+    <div id="auth-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); backdrop-filter: blur(16px); z-index: 9999999; justify-content: center; align-items: center; padding: 16px;">
+        <div class="modal-card">
+            <button class="modal-close" onclick="closeAuthModal()">&times;</button>
+            <h3><i class="fa-solid fa-lock"></i> Đăng Nhập HTH Supper Voice</h3>
+            <p style="color: #94A3B8; font-size: 0.88rem; margin: 8px 0 16px 0;">Nhập Tên tài khoản và Mật khẩu để trải nghiệm đầy đủ tính năng tạo voice.</p>
+            
+            <div class="form-group">
+                <label for="auth-username">Tên tài khoản:</label>
+                <input type="text" id="auth-username" placeholder="Nhập tên tài khoản..." onkeydown="if(event.key==='Enter') submitAuth()">
+            </div>
+            
+            <div class="form-group">
+                <label for="auth-password">Mật khẩu:</label>
+                <input type="password" id="auth-password" placeholder="Nhập mật khẩu..." onkeydown="if(event.key==='Enter') submitAuth()">
+            </div>
+
+            <button class="btn-accent btn-block" onclick="submitAuth()"><i class="fa-solid fa-key"></i> ĐĂNG NHẬP NGAY</button>
+        </div>
+    </div>
+
+    <!-- TRANG GIỚI THIỆU (LANDING PAGE) -->
+    <main id="hero-section" class="hero">
+        <div class="hero-content">
+            <div class="badge-tag"><i class="fa-solid fa-microchip"></i> Công Nghệ Voice AI Cảm Xúc Hàng Đầu 2026</div>
+            <h1>Cỗ Máy Siêu Tạo Voice <br><span class="text-gradient">Tự Nhiên Như Người Thật</span></h1>
+            <p>Hệ thống cỗ máy siêu tạo voice đa ngôn ngữ truyền cảm, sống động. Tự động đồng bộ hơn 700+ giọng đọc chất lượng cao VIP.</p>
+            <div class="hero-btns">
+                <button class="btn-hero-primary" onclick="openAuthModal(); return false;"><i class="fa-solid fa-rocket"></i> Trải Nghiệm Ngay</button>
+                <button class="btn-hero-secondary" onclick="openStudio(); return false;"><i class="fa-solid fa-circle-play"></i> Xem Độc Quyền</button>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3 id="stat-voice-count">700+</h3>
+                    <p>Giọng đọc VIP</p>
+                </div>
+                <div class="stat-card">
+                    <h3>99.9%</h3>
+                    <p>Độ tự nhiên truyền cảm</p>
+                </div>
+                <div class="stat-card">
+                    <h3>0s</h3>
+                    <p>Độ trễ xử lý realtime</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- TRANG CÔNG CỤ TẠO VOICE CHUYÊN NGHIỆP (STUDIO VIEW CHUẨN 100% TOOL EXE) -->
+    <div id="studio-section" class="studio-container hidden">
+        <div class="studio-header" style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="display:flex; gap:12px; align-items:center;">
+                <button type="button" class="btn-hero-primary active-tab-btn" id="tab-btn-studio" onclick="switchStudioTab('voice')" style="padding: 8px 16px; font-size: 0.9rem;">
+                    <i class="fa-solid fa-microphone-lines"></i> Studio Tạo Voice AI
+                </button>
+                <button type="button" class="btn-hero-secondary" id="tab-btn-modal-dashboard" onclick="switchStudioTab('dashboard')" style="padding: 8px 16px; font-size: 0.9rem;">
+                    <i class="fa-solid fa-chart-line"></i> ⚡ Giám Sát Realtime Modal GPU
+                </button>
+            </div>
+            <span class="status-indicator" id="modal-global-status-badge"><i class="fa-solid fa-circle-check"></i> Serverless GPU Sẵn sàng</span>
+        </div>
+
+        <!-- TAB 1: GIAO DIỆN TẠO VOICE STUDIO CHÍNH -->
+        <div id="tab-content-voice-studio">
+            <div class="studio-grid">
+            <!-- CỘT BÊN TRÁI: KỊCH BẢN, BIỂU CẢM VÀ BẢNG PHÂN ĐOẠN -->
+            <div class="panel-left">
+                <!-- CẤU HÌNH GOOGLE GEMINI API KEY -->
+                <div class="api-config-card">
+                    <label for="input-gemini-key"><i class="fa-brands fa-google"></i> Google Gemini API Key (Auto Biểu Cảm):</label>
+                    <div class="input-with-btn">
+                        <input type="password" id="input-gemini-key" placeholder="Nhập Google Gemini API Key (AI-zaSy...)" onchange="saveGeminiKey()">
+                        <button class="btn-icon" onclick="toggleKeyVisibility()"><i class="fa-solid fa-eye" id="key-eye-icon"></i></button>
+                    </div>
+                </div>
+
+                <!-- KHUNG NHẬP KỊCH BẢN + NÚT IMPORT FILE TXT -->
+                <div class="card-box">
+                    <div class="section-header-inline">
+                        <label for="text-input"><strong><i class="fa-solid fa-pen-to-square"></i> Văn Bản Kịch Bản Cần Tạo Voice (Nhập hoặc import file):</strong></label>
+                        <button class="btn-import-file" onclick="triggerImportTxt()"><i class="fa-solid fa-folder-open"></i> Import file TXT</button>
+                        <input type="file" id="file-import-txt" accept=".txt" class="hidden" onchange="handleFileTxtImport(event)">
+                    </div>
+
+                    <!-- DANH SÁCH THẺ BIỂU CẢM THAY ĐỔI ĐỘNG THEO AI ENGINE -->
+                    <div class="emotion-tags" id="emotion-tags-container">
+                        <!-- Render động qua JS -->
+                    </div>
+
+                    <textarea id="text-input" placeholder="Nhập hoặc dán đoạn văn bản kịch bản cần tạo giọng đọc tại đây..." oninput="updateCharCount()"></textarea>
+                    
+                    <div id="text-char-count" class="text-meta-bar"><i class="fa-solid fa-font"></i> Tổng số ký tự: <strong>0</strong> ký tự</div>
+
+                    <!-- CẤU HÌNH CHIA ĐOẠN -->
+                    <div class="form-group-inline">
+                        <label for="select-chunk-mode"><strong><i class="fa-solid fa-scissors"></i> Cách chia đoạn (Chuẩn Tool EXE):</strong></label>
+                        <select id="select-chunk-mode">
+                            <option value="300">Theo câu (Lùi tìm dấu câu - Tối đa 300 ký tự)</option>
+                            <option value="200">Theo câu (Tối đa 200 ký tự)</option>
+                            <option value="500">Theo câu (Tối đa 500 ký tự)</option>
+                            <option value="800">Theo câu (Tối đa 800 ký tự)</option>
+                            <option value="line">Theo dòng mới (\n)</option>
+                            <option value="sentence">Theo câu (. ! ?)</option>
+                        </select>
+                    </div>
+
+                    <div class="grid-2-col">
+                        <button class="btn-secondary" onclick="autoExpress()"><i class="fa-solid fa-wand-magic-sparkles"></i> Auto Biểu Cảm (Gemini)</button>
+                        <button class="btn-primary" onclick="splitChunks()"><i class="fa-solid fa-bolt"></i> Chia Đoạn Văn Bản</button>
+                    </div>
+                </div>
+
+                <!-- BẢNG DANH SÁCH ĐOẠN VĂN BẢN CHUẨN TOOL EXE -->
+                <div class="card-box">
+                    <label><strong><i class="fa-solid fa-list-check"></i> Danh sách các đoạn văn bản sau chia nhỏ:</strong></label>
+                    <div class="table-container">
+                        <table class="table-chunks">
+                            <thead>
+                                <tr>
+                                    <th style="width: 10%;">STT</th>
+                                    <th style="width: 45%;">Nội dung đoạn</th>
+                                    <th style="width: 15%;">Trạng thái</th>
+                                    <th style="width: 12%;">Bản chọn</th>
+                                    <th style="width: 18%;">Nghe / Tải</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-chunks-body">
+                                <tr>
+                                    <td colspan="5" style="text-align: center; color: #94A3B8; padding: 20px;">Chưa có đoạn văn bản nào. Vui lòng nhập kịch bản và bấm "Chia Đoạn Văn Bản".</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- HỆ THỐNG NÚT ĐIỀU KHIỂN HÀNG LOẠT TOOL EXE -->
+                    <div class="action-buttons-group">
+                        <button class="btn-batch btn-batch-green" onclick="generateAllChunks()"><i class="fa-solid fa-play"></i> Tạo tất cả</button>
+                        <button class="btn-batch btn-batch-red" onclick="stopGenerating()"><i class="fa-solid fa-stop"></i> Dừng tạo</button>
+                        <button class="btn-batch btn-batch-mint" onclick="generateSelectedChunk()"><i class="fa-solid fa-crosshairs"></i> Tạo đoạn chọn</button>
+                        <button class="btn-batch btn-batch-blue" onclick="retryErrorChunks()"><i class="fa-solid fa-rotate-right"></i> Tạo lại lỗi</button>
+                        <button class="btn-batch btn-batch-cyan" onclick="playSelectedChunk()"><i class="fa-solid fa-volume-high"></i> Phát chọn</button>
+                        <button class="btn-batch btn-batch-red" onclick="stopPlaying()"><i class="fa-solid fa-circle-pause"></i> Dừng</button>
+                    </div>
+                </div>
+
+                <!-- KHUNG NHẬT KÝ HOẠT ĐỘNG (APP LOGS) -->
+                <div class="logs-card">
+                    <div class="logs-title"><i class="fa-solid fa-terminal"></i> Nhật ký hoạt động (App Logs)</div>
+                    <div id="app-logs-content" class="logs-content">
+                        [System] HTH Supper Voice Vip Studio sẵn sàng hoạt động.<br>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CỘT BÊN PHẢI: CHỌN GIỌNG, TINH CHỈNH PHÁT ÂM VÀ GỘP FILE HOÀN CHỈNH -->
+            <div class="panel-right">
+                <div class="card-box voice-picker-card">
+                    <h3><i class="fa-solid fa-user-gear"></i> Giọng đọc mẫu đã chọn</h3>
+                    
+                    <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(0, 229, 255, 0.3); border-radius: 12px; padding: 14px 16px; margin-top: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <span style="font-size: 0.8rem; color: #94A3B8; font-weight: 600;">Giọng VIP hiện tại:</span>
+                            <span id="selected-voice-tag" style="background: rgba(0, 229, 255, 0.15); color: #00E5FF; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700;">700+ Giọng VIP</span>
+                        </div>
+                        
+                        <div style="font-size: 1rem; font-weight: 700; color: #F8FAFC; word-break: break-word; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;" id="selected-voice-display">
+                            <i class="fa-solid fa-microphone-lines" style="color: #00E5FF; font-size: 18px;"></i>
+                            <span id="current-selected-voice-name">Aaditya - Luxury Ads and Commercials</span>
+                        </div>
+
+                        <!-- Trình chọn giọng ẩn hỗ trợ lấy value -->
+                        <select id="select-voice" onchange="onVoiceSelectionChange()" style="display: none;">
+                            <option value="Aaditya - Luxury Ads and Commercials">Aaditya - Luxury Ads and Commercials</option>
+                        </select>
+
+                        <div style="display: flex; width: 100%;">
+                            <button type="button" id="btn-open-voice-browser" onclick="openVoiceBrowserModal()" style="width: 100%; padding: 12px 16px; background: linear-gradient(135deg, #7C4DFF, #00E5FF); border: none; color: #FFF; font-weight: 700; font-size: 0.9rem; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 15px rgba(0, 229, 255, 0.3); transition: transform 0.15s;">
+                                <i class="fa-solid fa-list-ul"></i> Mở Bảng Danh Sách Giọng VIP
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BẢNG TINH CHỈNH PHÁT ÂM & ĐẶC TÍNH GIỌNG -->
+                <div class="card-box audio-params-card">
+                    <h4><i class="fa-solid fa-sliders"></i> Tinh chỉnh phát âm & Đặc tính giọng</h4>
+                    
+
+
+                    <div class="grid-2-col omni-only-param">
+                        <div class="form-group-inline">
+                            <label for="select-target-lang">Ngôn ngữ đọc (Language):</label>
+                            <select id="select-target-lang">
+                                <option value="auto" selected>Auto (Tự phát hiện)</option>
+                                <option value="vi">Tiếng Việt (Vietnamese)</option>
+                                <option value="en">Tiếng Anh (English)</option>
+                                <option value="zh">Tiếng Trung (Chinese)</option>
+                                <option value="ja">Tiếng Nhật (Japanese)</option>
+                                <option value="ko">Tiếng Hàn (Korean)</option>
+                            </select>
+                        </div>
+                        <div class="form-group-inline">
+                            <label for="select-accent">Đặc tính / Accent (Instruct):</label>
+                            <select id="select-accent">
+                                <option value="auto">Auto</option>
+                                <option value="north">Giọng Bắc truyền cảm</option>
+                                <option value="south">Giọng Nam mượt mà</option>
+                                <option value="female">Giọng Nữ chuẩn radio</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid-2-col">
+                        <div class="form-group-inline omni-only-param">
+                            <label for="select-pitch">Cao độ (Pitch):</label>
+                            <select id="select-pitch">
+                                <option value="auto">Auto</option>
+                                <option value="low">Trầm (Low Pitch)</option>
+                                <option value="high">Bổng (High Pitch)</option>
+                            </select>
+                        </div>
+                        <div class="form-group-inline">
+                            <label for="select-threads">Số lượng tạo (Threads):</label>
+                            <select id="select-threads">
+                                <option value="1">1 Thread</option>
+                                <option value="2">2 Threads</option>
+                                <option value="3">3 Threads</option>
+                                <option value="4" selected>4 Threads</option>
+                                <option value="5">5 Threads</option>
+                                <option value="6">6 Threads</option>
+                                <option value="7">7 Threads</option>
+                                <option value="8">8 Threads (Max Tốc độ)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 10px;">
+                        <label>
+                            <input type="checkbox" id="check-denoise" checked>
+                            <span><i class="fa-solid fa-wand-magic-sparkles"></i> Bật chế độ Khử Nhiễu Nền AI (Denoise)</span>
+                        </label>
+                    </div>
+
+                    <div class="slider-group omni-only-param" style="display: none !important;">
+                        <div class="slider-header">
+                            <span>Khử nhiễu (Steps):</span>
+                            <span class="slider-val" id="val-steps">64</span>
+                        </div>
+                        <input type="range" id="range-steps" min="10" max="64" value="64" oninput="document.getElementById('val-steps').innerText=this.value">
+                    </div>
+
+                    <div class="slider-group">
+                        <div class="slider-header">
+                            <span>Tốc độ đọc (Speed):</span>
+                            <span class="slider-val" id="val-speed">1.00x</span>
+                        </div>
+                        <input type="range" id="range-speed" min="0.5" max="2.0" step="0.05" value="1.0" oninput="document.getElementById('val-speed').innerText=this.value+'x'">
+                    </div>
+
+                    <div class="slider-group omni-only-param">
+                        <div class="slider-header">
+                            <span>Độ bám sát giọng (CFG Scale):</span>
+                            <span class="slider-val" id="val-cfg">2.0</span>
+                        </div>
+                        <input type="range" id="range-cfg" min="1.0" max="5.0" step="0.1" value="2.0" oninput="document.getElementById('val-cfg').innerText=this.value">
+                    </div>
+
+                    <div class="slider-group omni-only-param">
+                        <div class="slider-header">
+                            <span>Độ biến hóa (Temperature):</span>
+                            <span class="slider-val" id="val-temp">5.0</span>
+                        </div>
+                        <input type="range" id="range-temp" min="1.0" max="10.0" step="0.5" value="5.0" oninput="document.getElementById('val-temp').innerText=this.value">
+                    </div>
+
+                    <div class="slider-group">
+                        <div class="slider-header">
+                            <span>Khoảng đệm lặng (Pad Duration):</span>
+                            <span class="slider-val" id="val-pad">0.00s</span>
+                        </div>
+                        <input type="range" id="range-pad" min="0.0" max="1.0" step="0.05" value="0.00" oninput="document.getElementById('val-pad').innerText=this.value+'s'">
+                    </div>
+
+                    <div class="slider-group">
+                        <div class="slider-header">
+                            <span>Độ mượt hòa âm (Fade Duration):</span>
+                            <span class="slider-val" id="val-fade">0.05s</span>
+                        </div>
+                        <input type="range" id="range-fade" min="0.0" max="0.5" step="0.01" value="0.05" oninput="document.getElementById('val-fade').innerText=this.value+'s'">
+                    </div>
+                </div>
+
+                <button id="btn-generate-all" class="btn-accent btn-block" onclick="generateAudio()"><i class="fa-solid fa-cloud-arrow-up"></i> SIÊU TẠO ÂM THANH HOÀN CHỈNH</button>
+
+                <!-- THANH TIẾN TRÌNH PROGRESS BAR (% TẠO VOICE) -->
+                <div id="progress-card" class="progress-card hidden">
+                    <div class="progress-status-title">
+                        <i class="fa-solid fa-spinner fa-spin"></i> <span id="progress-status-text">Đang kết nối Cỗ Máy Siêu Tạo Voice...</span>
+                    </div>
+                    <div class="progress-bar-track">
+                        <div id="progress-bar-fill" class="progress-bar-fill"></div>
+                    </div>
+                    <div class="progress-text"><span id="progress-percent">0</span>% Hoàn thành</div>
+                </div>
+
+                <!-- KHỐI GỘP & XUẤT BẢN TỆP HOÀN CHỈNH (CHUẨN TOOL EXE) -->
+                <div class="merge-section-card">
+                    <h4><i class="fa-solid fa-file-audio"></i> Gộp & Xuất bản tệp hoàn chỉnh</h4>
+                    <div>
+                        <label>
+                            <input type="checkbox" id="check-auto-clean" checked>
+                            <span>Tự động dọn dẹp (xóa) toàn bộ file tạm sau khi gộp</span>
+                        </label>
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <label for="input-silence-pause">Khoảng lặng giữa các đoạn (giây):</label>
+                        <input type="number" id="input-silence-pause" value="0.2" step="0.1" min="0.0" max="5.0">
+                    </div>
+                    <button class="btn-merge-all" onclick="mergeAllAudioChunks()"><i class="fa-solid fa-layer-group"></i> GỘP CÁC ĐOẠN & DỌN DẸP FILE TẠM</button>
+                </div>
+
+                <div id="audio-result-card" class="result-card hidden">
+                    <p style="color:#10B981; font-weight:700;"><i class="fa-solid fa-circle-check"></i> Siêu tạo âm thanh thành công!</p>
+                    <audio id="audio-player" controls></audio>
+                    <a id="download-link" href="#" download class="btn-secondary-block"><i class="fa-solid fa-download"></i> Tải File Âm Thanh (.wav)</a>
+                </div>
+            </div> <!-- KẾT THÚC PANEL RIGHT -->
+        </div> <!-- KẾT THÚC STUDIO GRID -->
+        </div> <!-- KẾT THÚC TAB 1 STUDIO (TAB-CONTENT-VOICE-STUDIO) -->
+
+        <!-- TAB 2: TAB GIÁM SÁT REALTIME MODAL GPU DASHBOARD (ĐẦY ĐỦ NHƯ MO_DASHBOARD_KIEM_TRA_ACC_MODAL.BAT) -->
+        <div id="tab-content-modal-dashboard" class="hidden">
+            <div style="background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(16px); border: 1px solid rgba(0, 229, 255, 0.25); border-radius: 16px; padding: 24px; margin-bottom: 24px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; gap: 14px;">
+                        <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #00E5FF, #7C4DFF); border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; color: #fff; box-shadow: 0 0 20px rgba(0,229,255,0.4);">⚡</div>
+                        <div>
+                            <h3 style="font-size: 20px; font-weight: 800; background: linear-gradient(90deg, #00E5FF, #A78BFA); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">MODAL GPU REALTIME MONITOR & BILLING</h3>
+                            <p style="font-size: 13px; color: #94A3B8; margin-top: 2px;">Kiểm tra Trạng thái Realtime, Chi phí Credit $30 & Độ trễ Ping các máy chủ GPU Modal</p>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <button class="btn-import-file" onclick="scanModalGpuStatus()" style="padding: 10px 16px; background: linear-gradient(135deg, #10B981, #059669); color: #FFF; font-weight: 700;">
+                            <span id="spin-dash-icon"><i class="fa-solid fa-rotate"></i></span> Quét Ngay
+                        </button>
+                        <button class="btn-import-file" onclick="resetGpuBillingTracker()" title="Đặt lại thống kê chi phí $ GPU" style="padding: 10px 14px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #EF4444; font-weight: 700;">
+                            <i class="fa-solid fa-trash-can"></i> Reset $
+                        </button>
+                        <div style="font-size: 13px; color: #00E5FF; font-weight: 600; background: rgba(0,229,255,0.1); padding: 8px 14px; border-radius: 8px; border: 1px solid rgba(0,229,255,0.2);">
+                            ⏱️ Tự quét lại trong: <strong id="dash-timer-val" style="font-size: 15px; color: #FFF;">30s</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BẢNG THỐNG KÊ KẾT QUẢ STATS CARDS -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
+                    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 18px;">
+                        <div style="font-size: 12px; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.5px;">Tổng Số GPU Endpoints</div>
+                        <div id="stat-dash-total" style="font-size: 28px; font-weight: 800; color: #FFF; margin-top: 4px;">--</div>
+                    </div>
+                    <div style="background: rgba(16,185,129,0.05); border: 1px solid rgba(16,185,129,0.2); border-radius: 14px; padding: 18px;">
+                        <div style="font-size: 12px; color: #10B981; text-transform: uppercase; letter-spacing: 0.5px;">Tài Khoản Live 🟢</div>
+                        <div id="stat-dash-live" style="font-size: 28px; font-weight: 800; color: #10B981; margin-top: 4px;">--</div>
+                    </div>
+                    <div style="background: rgba(239,68,68,0.05); border: 1px solid rgba(239,68,68,0.2); border-radius: 14px; padding: 18px;">
+                        <div style="font-size: 12px; color: #EF4444; text-transform: uppercase; letter-spacing: 0.5px;">Tài Khoản Off / Lỗi 🔴</div>
+                        <div id="stat-dash-die" style="font-size: 28px; font-weight: 800; color: #EF4444; margin-top: 4px;">--</div>
+                    </div>
+                    <div style="background: rgba(0,229,255,0.05); border: 1px solid rgba(0,229,255,0.2); border-radius: 14px; padding: 18px;">
+                        <div style="font-size: 12px; color: #00E5FF; text-transform: uppercase; letter-spacing: 0.5px;">Chi Phí Đã Dùng / Ước Tính 💵</div>
+                        <div id="stat-dash-credit" style="font-size: 24px; font-weight: 800; color: #00E5FF; margin-top: 4px;">$0.00 / $30.00</div>
+                    </div>
+                </div>
+
+                <!-- KHU VỰC HIỂN THỊ CARDS CÁC TÀI KHOẢN MODAL GPU REALTIME -->
+                <div id="modal-gpu-cards-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px;">
+                    <!-- Render động danh sách máy chủ GPU -->
+                </div>
+            </div>
+        </div>
+    </div> <!-- KẾT THÚC CẢ TRANG STUDIO (STUDIO-SECTION) -->
+
+    <!-- MODAL BẢNG QUẢN LÝ USER ADMIN MANAGER TÍCH HỢP GITHUB TOKEN VĨNH VIỄN -->
+    <div id="admin-modal" class="modal-overlay hidden">
+        <div class="modal-card modal-large">
+            <button class="modal-close" onclick="closeAdminModal()">&times;</button>
+            <h3><i class="fa-solid fa-crown"></i> Bảng Quản Lý Người Dùng & Hạn Mức (Admin VIP)</h3>
+
+            <style>
+                .btn-tag:hover { background: rgba(0,229,255,0.25); border-color: #00E5FF; }
+                .tag-highlight { background: rgba(236,72,153,0.15); border-color: #EC4899; color: #EC4899; }
+                .tag-highlight:hover { background: rgba(236,72,153,0.3); }
+
+                /* MODERN TOAST NOTIFICATION STYLES */
+                .custom-toast {
+                    background: rgba(15, 23, 42, 0.94);
+                    border: 1px solid rgba(0, 229, 255, 0.35);
+                    backdrop-filter: blur(16px);
+                    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.6), 0 0 20px rgba(0, 229, 255, 0.2);
+                    border-radius: 14px;
+                    padding: 14px 22px;
+                    min-width: 320px;
+                    max-width: 450px;
+                    transform: translateX(120%);
+                    animation: slideInToast 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+                    transition: all 0.4s ease;
+                }
+                @keyframes slideInToast {
+                    to { transform: translateX(0); }
+                }
+                .custom-toast.toast-success { border-color: rgba(16, 185, 129, 0.5); box-shadow: 0 0 20px rgba(16, 185, 129, 0.2); }
+                .custom-toast.toast-error { border-color: rgba(239, 68, 68, 0.5); box-shadow: 0 0 20px rgba(239, 68, 68, 0.2); }
+                .custom-toast.toast-warning { border-color: rgba(245, 158, 11, 0.5); box-shadow: 0 0 20px rgba(245, 158, 11, 0.2); }
+                .custom-toast.fade-out { opacity: 0; transform: translateY(-20px) scale(0.95); }
+            </style>
+
+            <!-- KHU VỰC QUẢN LÝ LINK GPU SERVERLESS REALTIME PRO -->
+            <div style="background: rgba(0,229,255,0.03); border:1px solid rgba(0,229,255,0.2); border-radius:12px; padding:16px; margin: 16px 0;">
+                <h4 style="color:#00E5FF; font-size:0.95rem; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between;">
+                    <span><i class="fa-solid fa-server"></i> Quản Lý Link Máy Chủ Serverless GPU (Modal URLs):</span>
+                    <span style="font-size:0.75rem; color:#10B981; font-weight:normal;"><i class="fa-solid fa-bolt"></i> Realtime Supabase</span>
+                </h4>
+                
+                <div style="display:flex; gap:10px; margin-bottom:12px;">
+                    <input type="text" id="new-gpu-url" placeholder="Dán link Modal GPU mới (https://...)..." style="flex:1; padding:10px 14px; background:rgba(0,0,0,0.4); border:1px solid rgba(0,229,255,0.3); border-radius:8px; color:#FFF;">
+                    <button class="btn-accent" onclick="addNewGpuUrl()" style="white-space:nowrap; width:auto;"><i class="fa-solid fa-plus"></i> Thêm Link GPU</button>
+                </div>
+
+                <div id="gpu-url-list-container" style="display:flex; flex-direction:column; gap:8px; max-height:160px; overflow-y:auto; padding-right:4px;">
+                    <!-- Danh sách URL GPU render động -->
+                </div>
+            </div>
+
+            <div style="background: rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.1); border-radius:10px; padding:16px; margin: 16px 0;">
+                <h4 style="color:#10B981; font-size:0.9rem; margin-bottom:10px;"><i class="fa-solid fa-user-plus"></i> Thêm Tài Khoản Mới:</h4>
+                <div class="grid-2-col">
+                    <input type="text" id="new-user-name" placeholder="Tên tài khoản...">
+                    <input type="text" id="new-user-pass" placeholder="Mật khẩu...">
+                </div>
+                <div class="grid-2-col" style="margin-top: 8px;">
+                    <input type="number" id="new-user-quota" placeholder="Hạn mức KÝ TỰ (mặc định 100,000)..." value="100000">
+                    <input type="text" id="new-user-role" placeholder="Vai trò (Khách VIP)..." value="Khách VIP">
+                </div>
+                <button class="btn-accent" onclick="addNewUser()" style="margin-top: 12px; width: auto;"><i class="fa-solid fa-floppy-disk"></i> Lưu Tài Khoản</button>
+            </div>
+
+            <div style="max-height: 250px; overflow-y: auto;">
+                <table class="table-chunks">
+                    <thead>
+                        <tr>
+                            <th>Tài khoản</th>
+                            <th>Mật khẩu</th>
+                            <th>Hạn Mức Ký Tự</th>
+                            <th>Vai Trò</th>
+                            <th>Thao Tác</th>
+                        </tr>
+                    </thead>
+                    <tbody id="user-table-body">
+                        <!-- Render JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL XÁC NHẬN XÓA TÀI KHOẢN PRO -->
+    <div id="confirm-delete-modal" class="modal-overlay hidden">
+        <div class="modal-card" style="max-width: 420px; text-align: center; border-color: rgba(239, 68, 68, 0.4); box-shadow: 0 0 30px rgba(239, 68, 68, 0.25);">
+            <div style="width: 60px; height: 60px; background: rgba(239, 68, 68, 0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+                <i class="fa-solid fa-triangle-exclamation" style="font-size: 28px; color: #EF4444;"></i>
+            </div>
+            <h3 style="color: #F8FAFC; margin-bottom: 8px;">Xác Nhận Xóa Tài Khoản</h3>
+            <p id="confirm-delete-text" style="color: #94A3B8; font-size: 0.95rem; margin-bottom: 24px;">Bạn có chắc chắn muốn xóa vĩnh viễn tài khoản này không?</p>
+            <div style="display: flex; gap: 12px; justify-content: center;">
+                <button class="btn-import-file" onclick="closeConfirmDeleteModal()" style="padding: 10px 20px; background: rgba(255,255,255,0.08); color: #CBD5E1;">Hủy Bỏ</button>
+                <button id="btn-do-confirm-delete" class="btn-import-file" style="padding: 10px 22px; background: linear-gradient(135deg, #EF4444, #DC2626); color: #FFF; font-weight: 700; border: none; box-shadow: 0 4px 15px rgba(239,68,68,0.4);">Đồng Ý Xóa</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL SỬA HẠN MỨC KÝ TỰ PRO -->
+    <div id="edit-quota-modal" class="modal-overlay hidden">
+        <div class="modal-card" style="max-width: 440px; border-color: rgba(0, 229, 255, 0.4);">
+            <button class="modal-close" onclick="closeEditQuotaModal()">&times;</button>
+            <h3 style="color: #00E5FF; margin-bottom: 12px;"><i class="fa-solid fa-pen-to-square"></i> Cập Nhật Hạn Mức Ký Tự</h3>
+            <p id="edit-quota-user-title" style="color: #CBD5E1; font-size: 0.9rem; margin-bottom: 16px;">Tài khoản: admin-0405</p>
+            
+            <div style="margin-bottom: 20px;">
+                <label style="font-size: 0.85rem; color: #94A3B8; display: block; margin-bottom: 6px;">Hạn mức Ký Tự Mới:</label>
+                <input type="number" id="input-modal-new-quota" style="width: 100%; padding: 12px 16px; background: rgba(0,0,0,0.4); border: 1px solid rgba(0,229,255,0.3); border-radius: 8px; color: #FFF; font-size: 1rem; font-weight: 600;" placeholder="Nhập số ký tự...">
+            </div>
+
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button class="btn-import-file" onclick="closeEditQuotaModal()" style="padding: 9px 18px; background: rgba(255,255,255,0.08); color: #CBD5E1;">Hủy</button>
+                <button onclick="submitEditUserQuotaModal()" class="btn-import-file" style="padding: 9px 22px; background: linear-gradient(135deg, #10B981, #059669); color: #FFF; font-weight: 700; border: none; box-shadow: 0 4px 15px rgba(16,185,129,0.3);">Lưu Thay Đổi</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DUYỆT BẢNG GIỌNG ĐỌC CÓ NÚT PLAY TRỰC TIẾP TỪNG VOICE VÀ BỘ LỌC ĐẦY ĐỦ -->
+    <div id="voice-browser-modal" class="modal-overlay hidden" style="display: none;">
+        <div class="modal-card" style="max-width: 880px; width: 92%; max-height: 88vh; display: flex; flex-direction: column; border-color: rgba(0, 229, 255, 0.4);">
+            <button class="modal-close" onclick="closeVoiceBrowserModal()">&times;</button>
+            <h3 id="modal-voice-title" style="color: #00E5FF; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                <i class="fa-solid fa-headphones"></i> Bảng Duyệt VIP Danh Sách Giọng Đọc
+            </h3>
+            
+            <!-- BỘ LỌC TÌM KIẾM ĐẦY ĐỦ TRONG MODAL -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 14px;">
+                <input type="text" id="voice-modal-search-input" oninput="renderVoiceBrowserList()" placeholder="🔍 Tìm tên hoặc Voice ID..." style="padding: 8px 12px; background: rgba(0,0,0,0.5); border: 1px solid rgba(0,229,255,0.3); border-radius: 8px; color: #FFF; font-size: 0.85rem;">
+                
+                <select id="modal-filter-lang" onchange="renderVoiceBrowserList()" style="padding: 8px 10px; background: rgba(0,0,0,0.5); border: 1px solid rgba(0,229,255,0.3); border-radius: 8px; color: #FFF; font-size: 0.85rem;">
+                    <option value="Tất cả">Ngôn ngữ: Tất cả</option>
+                </select>
+
+                <select id="modal-filter-gender" onchange="renderVoiceBrowserList()" style="padding: 8px 10px; background: rgba(0,0,0,0.5); border: 1px solid rgba(0,229,255,0.3); border-radius: 8px; color: #FFF; font-size: 0.85rem;">
+                    <option value="Tất cả">Giới tính: Tất cả</option>
+                </select>
+
+                <select id="modal-filter-age" onchange="renderVoiceBrowserList()" style="padding: 8px 10px; background: rgba(0,0,0,0.5); border: 1px solid rgba(0,229,255,0.3); border-radius: 8px; color: #FFF; font-size: 0.85rem;">
+                    <option value="Tất cả">Độ tuổi: Tất cả</option>
+                </select>
+
+                <select id="modal-filter-cat" onchange="renderVoiceBrowserList()" style="padding: 8px 10px; background: rgba(0,0,0,0.5); border: 1px solid rgba(0,229,255,0.3); border-radius: 8px; color: #FFF; font-size: 0.85rem;">
+                    <option value="Tất cả">Phân loại: Tất cả</option>
+                </select>
+            </div>
+
+            <div id="voice-browser-list-container" style="flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 10px; padding-right: 4px; max-height: 62vh;">
+                <!-- JS Render Danh Sách Voice Có Nút Play Trực Tiếp -->
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
