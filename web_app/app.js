@@ -19,6 +19,7 @@ function getAdminDefaultToken() {
 let allVoiceMetadata = [];
 let currentUser = null;
 let modalGpuUrls = [
+    "https://dangdinhhai240596--vox-tts-omnivoice-voxttsgenerator-gen-4f7a97.modal.run",
     "https://hhhh01234501--omnivoice-tts-serverless-omnivoicemodel-generate.modal.run",
     "https://hai319959--omnivoice-tts-serverless-omnivoicemodel-generate.modal.run",
     "https://danghai30052005--omnivoice-tts-serverless-omnivoicemodel-generate.modal.run"
@@ -2047,6 +2048,7 @@ async function scanModalGpuStatus() {
     // Nếu chưa có modalGpuUrls hoặc bị rỗng, tự nạp danh sách máy chủ mặc định từ modal_tokens.txt
     if (!modalGpuUrls || modalGpuUrls.length === 0) {
         modalGpuUrls = [
+            "https://dangdinhhai240596--vox-tts-omnivoice-voxttsgenerator-gen-4f7a97.modal.run",
             "https://hhhh01234501--omnivoice-tts-serverless-omnivoicemodel-generate.modal.run",
             "https://hai319959--omnivoice-tts-serverless-omnivoicemodel-generate.modal.run",
             "https://danghai30052005--omnivoice-tts-serverless-omnivoicemodel-generate.modal.run"
