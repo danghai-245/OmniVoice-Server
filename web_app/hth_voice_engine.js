@@ -543,8 +543,8 @@ async function generateAllChunks() {
 
     const workers = [];
     for (let i = 0; i < Math.min(maxThreads, totalChunks); i++) {
-        // Giãn cách nhẹ 150ms khi bật worker khởi chạy để phân luồng an toàn
-        if (i > 0) await new Promise(r => setTimeout(r, 150));
+        // Giãn cách 600ms giữa các luồng để Modal GPU Serverless nhận request ổn định 100%
+        if (i > 0) await new Promise(r => setTimeout(r, 600));
         workers.push(worker(i));
     }
 
@@ -643,9 +643,7 @@ function writeString(view, offset, string) {
 }
 
 async function processSingleChunk(idx, workerId = 0) {
-    // ★ startTime khai báo NGAY ĐẦU hàm - tuyệt đối không bao giờ undefined ★
-    const _chunkStartTime = Date.now();
-    
+    const chunkStartTime = Date.now();
     const item = currentChunksList[idx];
     if (!currentUser) { openAuthModal(); return; }
 
@@ -659,9 +657,9 @@ async function processSingleChunk(idx, workerId = 0) {
 
     item.status = "running";
     renderChunksTable();
-    addAppLog(`[Luồng ${workerId + 1}] Đang gửi yêu cầu cho Đoạn ${item.id} (${item.text.length} ký tự)...`);
+    addAppLog(`[Luồng ${workerId + 1}] Bắt đầu xử lý Đoạn ${item.id} (${item.text.length} ký tự)...`);
 
-    // Phân tải Round-Robin theo workerId & idx để không dồn 4 luồng vào 1 server GPU
+    // Phân tải Round-Robin GPU URL
     let gpuUrl = "";
     if (modalGpuUrls && modalGpuUrls.length > 0) {
         const serverIndex = (idx + workerId) % modalGpuUrls.length;
@@ -681,7 +679,7 @@ async function processSingleChunk(idx, workerId = 0) {
     try {
         const speedVal = parseFloat(document.getElementById("input-speech-speed")?.value || 1.0);
         
-        // Chuẩn hóa văn bản sạch trùng khớp 100% với Tool EXE Python chống lặp giọng / tiếng vọng
+        // Chuẩn hóa văn bản sạch
         let cleanText = item.text || "";
         const validTags = new Set(["[cười]", "[thở dài]", "[hắng giọng]", "[thì thầm]", "[ngập ngừng]", "[nói chậm]", "[nhấn giọng]"]);
         const tagMap = {
@@ -700,7 +698,7 @@ async function processSingleChunk(idx, workerId = 0) {
             cleanText += ".";
         }
 
-        // Lấy thông tin giọng mẫu được chọn chính xác từ allVoiceMetadata
+        // Thông tin giọng đọc
         const selectedVoiceName = document.getElementById("select-voice")?.value || "";
         const voiceMeta = allVoiceMetadata.find(v => v.name === selectedVoiceName) || (allVoiceMetadata.length > 0 ? allVoiceMetadata[0] : null);
         
@@ -714,28 +712,43 @@ async function processSingleChunk(idx, workerId = 0) {
             filename = voiceMeta.filename || "";
         }
 
+        // Lấy Base64 từ cache (đã được pre-fetch ở generateAllChunks)
         let refAudioBase64 = "";
         if (refAudioUrl) {
-            addAppLog(`Đang nạp tệp âm thanh mẫu "${selectedVoiceName}" từ GitHub...`);
             refAudioBase64 = await getVoiceBase64(refAudioUrl);
         }
 
-        addAppLog(`Đang gửi câu lệnh đến GPU cho Đoạn ${item.id} (Giọng mẫu: "${selectedVoiceName || 'Mặc định'}", ${refAudioBase64 ? 'đã đính kèm tệp âm thanh Base64 100%' : 'dùng URL link'}): "${cleanText.substring(0, 30)}..."`);
+        addAppLog(`Gửi lệnh GPU Đoạn ${item.id} (Giọng: "${selectedVoiceName || 'Mặc định'}"): "${cleanText.substring(0, 30)}..."`);
+
+        // Chuẩn bị payload siêu gọn nhẹ
+        const requestPayload = {
+            text: cleanText || item.text,
+            speed: speedVal,
+            voice_name: selectedVoiceName,
+            voice: selectedVoiceName,
+            voice_id: voiceId,
+            filename: filename
+        };
+        if (refAudioBase64) {
+            requestPayload.ref_audio_b64 = refAudioBase64;
+            requestPayload.ref_audio_base64 = refAudioBase64;
+        }
 
         let response = null;
         let lastError = null;
 
-        for (let retry = 0; retry < 4; retry++) {
+        // Vòng lặp retry 5 lần với Exponential Backoff
+        for (let retry = 0; retry < 5; retry++) {
             try {
                 if (retry > 0) {
-                    addAppLog(`[Đang đánh thức GPU / Thử lại ${retry}/3] Đang kết nối tới GPU cho Đoạn ${item.id}...`);
+                    const waitTime = retry * 2000;
+                    addAppLog(`[Thử lại ${retry}/4 - Đang chờ ${waitTime/1000}s] Kết nối lại GPU cho Đoạn ${item.id}...`);
                     if (modalGpuUrls && modalGpuUrls.length > 1) {
                         gpuUrl = modalGpuUrls[(idx + workerId + retry) % modalGpuUrls.length];
                     }
-                    await new Promise(r => setTimeout(r, 2000));
+                    await new Promise(r => setTimeout(r, waitTime));
                 }
 
-                // Timeout 120s bằng AbortController chống ngắt mạng sớm ở 30s
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 120000);
 
@@ -745,21 +758,7 @@ async function processSingleChunk(idx, workerId = 0) {
                         mode: "cors",
                         headers: { "Content-Type": "application/json" },
                         signal: controller.signal,
-                        body: JSON.stringify({
-                            text: cleanText || item.text,
-                            speed: speedVal,
-                            ref_text: "",
-                            voice_name: selectedVoiceName,
-                            voice: selectedVoiceName,
-                            voice_id: voiceId,
-                            ref_audio: refAudioBase64 || refAudioUrl,
-                            ref_audio_url: refAudioUrl,
-                            ref_audio_base64: refAudioBase64,
-                            prompt_speech: refAudioBase64,
-                            prompt_audio: refAudioBase64 || refAudioUrl,
-                            audio_prompt: refAudioBase64 || refAudioUrl,
-                            filename: filename
-                        })
+                        body: JSON.stringify(requestPayload)
                     });
                 } finally {
                     clearTimeout(timeoutId);
@@ -768,29 +767,30 @@ async function processSingleChunk(idx, workerId = 0) {
                 if (response && response.ok) {
                     const blob = await response.blob();
                     if (blob.size > 200) {
-                        // ★ GÁN NGAY - không gì có thể ngăn cản ★
                         item.audioUrl = URL.createObjectURL(blob);
                         item.status = "done";
-                        lastError = null; // Đánh dấu thành công
-
-                        // ★ BREAK KHỎI VÒNG RETRY NGAY LẬP TỨC ★
+                        lastError = null;
                         break;
+                    } else {
+                        lastError = new Error(`Dung lượng âm thanh quá nhỏ (${blob.size} bytes)`);
                     }
+                } else {
+                    lastError = new Error(`HTTP ${response ? response.status : 'Error'} - GPU phản hồi không hợp lệ`);
                 }
             } catch (retryErr) {
                 lastError = retryErr;
             }
         }
 
-        // ★ SAU KHI VÒNG RETRY KẾT THÚC - Kiểm tra kết quả ★
-        if (item.audioUrl && item.status === "done") {
-            // THÀNH CÔNG: Cập nhật UI & billing trong finally block an toàn
-            try { renderChunksTable(); } catch(e) { console.warn("render err:", e); }
-            try { addAppLog(`Đoạn ${item.id} tạo voice AI THÀNH CÔNG!`); } catch(e) {}
+        // Kiểm tra sau vòng retry
+        if (item.audioUrl) {
+            item.status = "done";
+            try { renderChunksTable(); } catch(e) {}
+            try { addAppLog(`✓ Đoạn ${item.id} tạo voice AI THÀNH CÔNG!`); } catch(e) {}
 
-            // Billing hoàn toàn cô lập
+            // Update Billing/Quota an toàn tuyệt đối
             try {
-                const elapsedSec = Math.max(1.0, (Date.now() - _chunkStartTime) / 1000);
+                const elapsedSec = Math.max(1.0, (Date.now() - chunkStartTime) / 1000);
                 const costUsd = Math.max(0.0015, (elapsedSec * 0.00035) + ((cleanText || item.text).length * 0.000005));
                 if (typeof trackGpuBillingUsage === "function") trackGpuBillingUsage(gpuUrl, costUsd);
                 if (typeof currentUser !== "undefined" && currentUser && typeof currentUser.used === "number") {
@@ -799,33 +799,30 @@ async function processSingleChunk(idx, workerId = 0) {
                         usersDatabase.USERS[currentUser.username].used = currentUser.used;
                     }
                     localStorage.setItem(`quota_used_${currentUser.username.toLowerCase()}`, currentUser.used);
-                    if (typeof syncUsersToGist === "function") syncUsersToGist().catch(e => console.warn(e));
+                    if (typeof syncUsersToGist === "function") syncUsersToGist().catch(e => {});
                     const quotaElem = document.getElementById("user-quota-display");
                     if (quotaElem) quotaElem.innerText = `${currentUser.used.toLocaleString('vi-VN')} / ${currentUser.quota.toLocaleString('vi-VN')} ký tự`;
                 }
-            } catch (billingErr) {
-                console.warn("Billing non-critical:", billingErr);
-            }
-            return; // ★ THOÁT THÀNH CÔNG - KHÔNG QUA OUTER CATCH ★
+            } catch (billingErr) {}
+            return;
         }
 
-        // THẤT BẠI: Tất cả retry đều không thành công
-        throw new Error(lastError ? lastError.message : `HTTP ${response ? response.status : 'Network Error'} - GPU Server không phản hồi`);
+        throw new Error(lastError ? lastError.message : "GPU Server bận hoặc không phản hồi");
 
     } catch (err) {
         console.error("Lỗi gọi Serverless GPU:", err);
-        // ★ BẢO VỆ TUYỆT ĐỐI: Nếu đã có audio thì KHÔNG BAO GIỜ set status = "error" ★
         if (item.audioUrl) {
             item.status = "done";
             addAppLog(`Đoạn ${item.id} đã có âm thanh thành công.`);
         } else {
             item.status = "error";
-            addAppLog(`Lỗi Đoạn ${item.id}: ${err.message}`);
+            addAppLog(`✕ Lỗi Đoạn ${item.id}: ${err.message}`);
             showToast("Lỗi Tạo Voice", `Đoạn ${item.id} gặp sự cố: ${err.message}`, "error");
         }
         renderChunksTable();
     }
 }
+
 
 
 function playSingleChunkAudio(e, idx) {
