@@ -646,7 +646,10 @@ function writeString(view, offset, string) {
 }
 
 async function processSingleChunk(idx, workerId = 0) {
-    const chunkStartTime = Date.now();
+    var startTime = Date.now();
+    var _chunkStartTime = Date.now();
+    var chunkStartTime = Date.now();
+    var curTime = Date.now();
     const item = currentChunksList[idx];
     if (!currentUser) { openAuthModal(); return; }
 

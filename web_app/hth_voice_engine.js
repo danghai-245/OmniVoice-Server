@@ -1,3 +1,6 @@
+// Global fallback safety variable
+window.startTime = Date.now();
+window._chunkStartTime = Date.now();
 const GITHUB_VOICE_REPO = "danghai-245/voice_11labs";
 
 // BỘ LƯU TRỮ GITHUB GIST REST API V3 (CHỈ DÙNG CHI NHÁNH FILE MODAL_URLS.JSON DUY NHẤT)
@@ -643,7 +646,10 @@ function writeString(view, offset, string) {
 }
 
 async function processSingleChunk(idx, workerId = 0) {
-    const chunkStartTime = Date.now();
+    var startTime = Date.now();
+    var _chunkStartTime = Date.now();
+    var chunkStartTime = Date.now();
+    var curTime = Date.now();
     const item = currentChunksList[idx];
     if (!currentUser) { openAuthModal(); return; }
 
