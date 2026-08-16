@@ -768,48 +768,48 @@ async function processSingleChunk(idx, workerId = 0) {
                 if (response && response.ok) {
                     const blob = await response.blob();
                     if (blob.size > 200) {
-                        // ★ GÁN AUDIO URL & STATUS "done" TRƯỚC TIÊN ★
+                        // ★ GÁN NGAY - không gì có thể ngăn cản ★
                         item.audioUrl = URL.createObjectURL(blob);
                         item.status = "done";
+                        lastError = null; // Đánh dấu thành công
 
-                        // ★ RENDER BẢNG & LOG NGAY - TRƯỚC MỌI CODE PHỤ ★
-                        renderChunksTable();
-                        addAppLog(`Đoạn ${item.id} tạo voice AI THÀNH CÔNG 100%! (${(blob.size / 1024).toFixed(1)} KB)`);
-
-                        // ★ BILLING & QUOTA - Hoàn toàn cô lập, lỗi ở đây KHÔNG ảnh hưởng status ★
-                        try {
-                            const elapsedSec = Math.max(1.0, (Date.now() - _chunkStartTime) / 1000);
-                            const costUsd = Math.max(0.0015, (elapsedSec * 0.00035) + ((cleanText || item.text).length * 0.000005));
-                            if (typeof trackGpuBillingUsage === "function") {
-                                trackGpuBillingUsage(gpuUrl, costUsd);
-                            }
-                            if (typeof currentUser !== "undefined" && currentUser && typeof currentUser.used === "number") {
-                                currentUser.used += item.text.length;
-                                if (typeof usersDatabase !== "undefined" && usersDatabase.USERS && usersDatabase.USERS[currentUser.username]) {
-                                    usersDatabase.USERS[currentUser.username].used = currentUser.used;
-                                }
-                                localStorage.setItem(`quota_used_${currentUser.username.toLowerCase()}`, currentUser.used);
-                                if (typeof syncUsersToGist === "function") {
-                                    syncUsersToGist().catch(e => console.warn("Lỗi sync quota:", e));
-                                }
-                                const quotaElem = document.getElementById("user-quota-display");
-                                if (quotaElem) {
-                                    quotaElem.innerText = `${currentUser.used.toLocaleString('vi-VN')} / ${currentUser.quota.toLocaleString('vi-VN')} ký tự`;
-                                }
-                            }
-                        } catch (billingErr) {
-                            // Lỗi billing KHÔNG ảnh hưởng gì - status đã là "done" rồi
-                            console.warn("Lỗi tính phí (không ảnh hưởng kết quả):", billingErr);
-                        }
-
-                        return; // ★ THOÁT HÀM THÀNH CÔNG ★
+                        // ★ BREAK KHỎI VÒNG RETRY NGAY LẬP TỨC ★
+                        break;
                     }
                 }
             } catch (retryErr) {
                 lastError = retryErr;
             }
         }
-        
+
+        // ★ SAU KHI VÒNG RETRY KẾT THÚC - Kiểm tra kết quả ★
+        if (item.audioUrl && item.status === "done") {
+            // THÀNH CÔNG: Cập nhật UI & billing trong finally block an toàn
+            try { renderChunksTable(); } catch(e) { console.warn("render err:", e); }
+            try { addAppLog(`Đoạn ${item.id} tạo voice AI THÀNH CÔNG!`); } catch(e) {}
+
+            // Billing hoàn toàn cô lập
+            try {
+                const elapsedSec = Math.max(1.0, (Date.now() - _chunkStartTime) / 1000);
+                const costUsd = Math.max(0.0015, (elapsedSec * 0.00035) + ((cleanText || item.text).length * 0.000005));
+                if (typeof trackGpuBillingUsage === "function") trackGpuBillingUsage(gpuUrl, costUsd);
+                if (typeof currentUser !== "undefined" && currentUser && typeof currentUser.used === "number") {
+                    currentUser.used += item.text.length;
+                    if (typeof usersDatabase !== "undefined" && usersDatabase.USERS && usersDatabase.USERS[currentUser.username]) {
+                        usersDatabase.USERS[currentUser.username].used = currentUser.used;
+                    }
+                    localStorage.setItem(`quota_used_${currentUser.username.toLowerCase()}`, currentUser.used);
+                    if (typeof syncUsersToGist === "function") syncUsersToGist().catch(e => console.warn(e));
+                    const quotaElem = document.getElementById("user-quota-display");
+                    if (quotaElem) quotaElem.innerText = `${currentUser.used.toLocaleString('vi-VN')} / ${currentUser.quota.toLocaleString('vi-VN')} ký tự`;
+                }
+            } catch (billingErr) {
+                console.warn("Billing non-critical:", billingErr);
+            }
+            return; // ★ THOÁT THÀNH CÔNG - KHÔNG QUA OUTER CATCH ★
+        }
+
+        // THẤT BẠI: Tất cả retry đều không thành công
         throw new Error(lastError ? lastError.message : `HTTP ${response ? response.status : 'Network Error'} - GPU Server không phản hồi`);
 
     } catch (err) {
