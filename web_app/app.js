@@ -435,6 +435,11 @@ function renderChunksTable() {
     }
 
     currentChunksList.forEach((chunk, idx) => {
+        // ĐẢM BẢO TUYỆT ĐỐI 100%: Nếu đoạn đã có file âm thanh audioUrl thì TRẠNG THÁI LUÔN LÀ "done" (✓ Hoàn thành)
+        if (chunk.audioUrl) {
+            chunk.status = "done";
+        }
+
         const tr = document.createElement("tr");
         if (selectedChunkIndex === idx) tr.className = "selected-row";
         tr.onclick = () => selectChunkRow(idx);
@@ -713,31 +718,40 @@ async function processSingleChunk(idx, workerId = 0) {
                     if (modalGpuUrls && modalGpuUrls.length > 1) {
                         gpuUrl = modalGpuUrls[(idx + workerId + retry) % modalGpuUrls.length];
                     }
-                    await new Promise(r => setTimeout(r, 3000));
+                    await new Promise(r => setTimeout(r, 2000));
                 }
 
-                response = await fetch(gpuUrl, {
-                    method: "POST",
-                    mode: "cors",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        text: cleanText || item.text,
-                        speed: speedVal,
-                        ref_text: "",
-                        voice_name: selectedVoiceName,
-                        voice: selectedVoiceName,
-                        voice_id: voiceId,
-                        ref_audio: refAudioBase64 || refAudioUrl,
-                        ref_audio_url: refAudioUrl,
-                        ref_audio_base64: refAudioBase64,
-                        prompt_speech: refAudioBase64,
-                        prompt_audio: refAudioBase64 || refAudioUrl,
-                        audio_prompt: refAudioBase64 || refAudioUrl,
-                        filename: filename
-                    })
-                });
+                // Thiết lập Timeout 120s bằng AbortController chống ngắt mạng sớm ở 30s
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 120000);
+
+                try {
+                    response = await fetch(gpuUrl, {
+                        method: "POST",
+                        mode: "cors",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        signal: controller.signal,
+                        body: JSON.stringify({
+                            text: cleanText || item.text,
+                            speed: speedVal,
+                            ref_text: "",
+                            voice_name: selectedVoiceName,
+                            voice: selectedVoiceName,
+                            voice_id: voiceId,
+                            ref_audio: refAudioBase64 || refAudioUrl,
+                            ref_audio_url: refAudioUrl,
+                            ref_audio_base64: refAudioBase64,
+                            prompt_speech: refAudioBase64,
+                            prompt_audio: refAudioBase64 || refAudioUrl,
+                            audio_prompt: refAudioBase64 || refAudioUrl,
+                            filename: filename
+                        })
+                    });
+                } finally {
+                    clearTimeout(timeoutId);
+                }
 
                 if (response && response.ok) {
                     const blob = await response.blob();
@@ -787,7 +801,7 @@ async function processSingleChunk(idx, workerId = 0) {
         console.error("Lỗi gọi Serverless GPU:", err);
         if (item.audioUrl) {
             item.status = "done";
-            addAppLog(`Đoạn ${item.id} đã tải audio thành công!`);
+            addAppLog(`Đoạn ${item.id} đã có âm thanh voice AI thành công!`);
         } else {
             item.status = "error";
             addAppLog(`Lỗi Đoạn ${item.id}: ${err.message}`);
