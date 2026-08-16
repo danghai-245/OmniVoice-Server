@@ -168,6 +168,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 // NẠP CẤU HÌNH TÀI KHOẢN TỪ SUPABASE REALTIME STORAGE (TỐC ĐỘ SUB-15MS)
 async function loadServerConfigFromGist() {
+    const ACTIVE_GPU_URL = "https://dangdinhhai240596--vox-tts-omnivoice-voxttsgenerator-gen-4f7a97.modal.run";
     try {
         const resp = await fetch(SUPABASE_READ_URL + "?t=" + Date.now(), {
             headers: {
@@ -177,9 +178,24 @@ async function loadServerConfigFromGist() {
         });
         if (resp.ok) {
             const data = await resp.json();
-            if (data.gpu_urls && Array.isArray(data.gpu_urls)) {
-                modalGpuUrls = data.gpu_urls.map(u => u.replace("--vieneu-tts-serverless-vieneumodel-generate", "--omnivoice-tts-serverless-omnivoicemodel-generate"));
+            if (data.gpu_urls && Array.isArray(data.gpu_urls) && data.gpu_urls.length > 0) {
+                // Lọc chỉ giữ URL modal.run thực sự hợp lệ (không phải URL cũ đã chết)
+                const validUrls = data.gpu_urls.filter(u => 
+                    u && u.includes("modal.run") && !u.includes("vieneu-tts") && u.trim() !== ""
+                );
+                if (validUrls.length > 0) {
+                    modalGpuUrls = validUrls;
+                    console.log("✅ Đã nạp URL GPU hợp lệ từ Supabase:", modalGpuUrls);
+                } else {
+                    // Supabase chứa URL cũ chết hết - giữ URL hardcode đang sống
+                    modalGpuUrls = [ACTIVE_GPU_URL];
+                    console.warn("⚠️ Supabase GPU URLs không hợp lệ, dùng URL cứng:", modalGpuUrls);
+                }
                 localStorage.setItem("active_modal_urls", JSON.stringify(modalGpuUrls));
+            } else {
+                // Không có gpu_urls trong Supabase - giữ URL hardcode
+                modalGpuUrls = [ACTIVE_GPU_URL];
+                console.warn("⚠️ Supabase không có gpu_urls, dùng URL cứng:", modalGpuUrls);
             }
             if (data.users) {
                 usersDatabase.USERS = data.users;
