@@ -1,3 +1,6 @@
+// Global fallback safety variable
+window.startTime = Date.now();
+window._chunkStartTime = Date.now();
 const GITHUB_VOICE_REPO = "danghai-245/voice_11labs";
 
 // BỘ LƯU TRỮ GITHUB GIST REST API V3 (CHỈ DÙNG CHI NHÁNH FILE MODAL_URLS.JSON DUY NHẤT)
