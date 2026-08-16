@@ -757,7 +757,8 @@ async function processSingleChunk(idx, workerId = 0) {
                         item.status = "done";
                         
                         try {
-                            const renderDurationSec = Math.max(1.0, (Date.now() - startTime) / 1000);
+                            const curTime = typeof startTime !== "undefined" ? startTime : Date.now();
+                            const renderDurationSec = Math.max(1.0, (Date.now() - curTime) / 1000);
                             const costUsd = Math.max(0.0015, (renderDurationSec * 0.00035) + ((cleanText || item.text).length * 0.000005));
                             if (typeof trackGpuBillingUsage === "function") {
                                 trackGpuBillingUsage(gpuUrl, costUsd);
