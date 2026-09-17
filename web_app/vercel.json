@@ -2,6 +2,17 @@
   "version": 2,
   "name": "hth-voicevip",
   "cleanUrls": true,
+  "functions": {
+    "api/index.py": {
+      "includeFiles": "Voice.json,capcut_tts_api/**"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/capcut/:path*",
+      "destination": "/api"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",

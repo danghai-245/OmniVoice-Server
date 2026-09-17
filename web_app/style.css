@@ -377,6 +377,42 @@ body {
     cursor: pointer;
 }
 
+/* Ô mật khẩu có nút xem/ẩn nội dung */
+.password-input-wrap {
+    position: relative;
+    display: flex;
+    width: 100%;
+}
+
+.password-input-wrap input {
+    width: 100%;
+    padding-right: 46px !important;
+}
+
+.password-toggle-btn {
+    position: absolute;
+    top: 50%;
+    right: 8px;
+    transform: translateY(-50%);
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 0;
+    color: #94A3B8;
+    cursor: pointer;
+    border-radius: 6px;
+}
+
+.password-toggle-btn:hover,
+.password-toggle-btn:focus-visible {
+    color: #C084FC;
+    background: rgba(168, 85, 247, 0.14);
+    outline: none;
+}
+
 /* KỊCH BẢN TEXTAREA AUTO FIT */
 .section-header-inline {
     display: flex;

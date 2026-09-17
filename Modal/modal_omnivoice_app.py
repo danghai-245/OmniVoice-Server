@@ -1,5 +1,3 @@
-import os
-
 import modal
 
 # Container thuần 100% OmniVoice Zero-Shot Voice Cloning
@@ -14,12 +12,7 @@ image = (
     .pip_install("git+https://github.com/k2-fsa/OmniVoice.git")
 )
 
-# Cho phep tao app test rieng ma khong thay the app dang chay.
-# Mac dinh van giu ten app cu de khong lam thay doi hanh vi hien tai.
-app = modal.App(
-    os.getenv("MODAL_APP_NAME", "omnivoice-tts-serverless"),
-    image=image,
-)
+app = modal.App("omnivoice-tts-serverless", image=image)
 
 @app.cls(gpu="T4", timeout=600, scaledown_window=600, max_containers=2)
 class OmniVoiceModel:

@@ -7,9 +7,9 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <script>
-        var startTime = Date.now();
-        var _chunkStartTime = Date.now();
-        var curTime = Date.now();
+        window.startTime = Date.now();
+        window._chunkStartTime = Date.now();
+        window.curTime = Date.now();
     </script>
     <title>HTH Supper Voice Vip - Cỗ Máy Siêu Tạo Voice AI Cảm Xúc</title>
     <meta name="description" content="HTH Supper Voice Vip - Cỗ máy siêu tạo voice AI cảm xúc đa ngôn ngữ chất lượng cao hàng đầu 2026.">
@@ -57,7 +57,10 @@
             
             <div class="form-group">
                 <label for="auth-password">Mật khẩu:</label>
-                <input type="password" id="auth-password" placeholder="Nhập mật khẩu..." onkeydown="if(event.key==='Enter') submitAuth()">
+                <div class="password-input-wrap">
+                    <input type="password" id="auth-password" placeholder="Nhập mật khẩu..." onkeydown="if(event.key==='Enter') submitAuth()">
+                    <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('auth-password', this)" aria-label="Hiện mật khẩu" title="Hiện/ẩn mật khẩu"><i class="fa-solid fa-eye"></i></button>
+                </div>
             </div>
 
             <button class="btn-accent btn-block" onclick="submitAuth()"><i class="fa-solid fa-key"></i> ĐĂNG NHẬP NGAY</button>
@@ -98,11 +101,13 @@
                 <button type="button" class="btn-hero-primary active-tab-btn" id="tab-btn-studio" onclick="switchStudioTab('voice')" style="padding: 8px 16px; font-size: 0.9rem;">
                     <i class="fa-solid fa-microphone-lines"></i> Studio Tạo Voice AI
                 </button>
-                <button type="button" class="btn-hero-secondary" id="tab-btn-modal-dashboard" onclick="switchStudioTab('dashboard')" style="padding: 8px 16px; font-size: 0.9rem;">
+                <button type="button" class="btn-hero-secondary" id="tab-btn-capcut" onclick="switchStudioTab('capcut')" style="padding: 8px 16px; font-size: 0.9rem;">
+                    <i class="fa-solid fa-clapperboard"></i> Voice CapCut
+                </button>
+                <button type="button" class="btn-hero-secondary" id="tab-btn-modal-dashboard" onclick="switchStudioTab('dashboard')" style="display:none!important; padding: 8px 16px; font-size: 0.9rem;">
                     <i class="fa-solid fa-chart-line"></i> ⚡ Giám Sát Realtime Modal GPU
                 </button>
             </div>
-            <span class="status-indicator" id="modal-global-status-badge"><i class="fa-solid fa-circle-check"></i> Serverless GPU Sẵn sàng</span>
         </div>
 
         <!-- TAB 1: GIAO DIỆN TẠO VOICE STUDIO CHÍNH -->
@@ -286,12 +291,12 @@
                         </label>
                     </div>
 
-                    <div class="slider-group omni-only-param" style="display: none !important;">
+                    <div class="slider-group omni-only-param">
                         <div class="slider-header">
-                            <span>Khử nhiễu (Steps):</span>
-                            <span class="slider-val" id="val-steps">64</span>
+                            <span>Số bước tạo âm thanh (Steps):</span>
+                            <span class="slider-val" id="val-steps">48</span>
                         </div>
-                        <input type="range" id="range-steps" min="10" max="64" value="64" oninput="document.getElementById('val-steps').innerText=this.value">
+                        <input type="range" id="range-steps" min="16" max="64" step="2" value="48" oninput="document.getElementById('val-steps').innerText=this.value">
                     </div>
 
                     <div class="slider-group">
@@ -305,17 +310,17 @@
                     <div class="slider-group omni-only-param">
                         <div class="slider-header">
                             <span>Độ bám sát giọng (CFG Scale):</span>
-                            <span class="slider-val" id="val-cfg">2.0</span>
+                            <span class="slider-val" id="val-cfg">2.4</span>
                         </div>
-                        <input type="range" id="range-cfg" min="1.0" max="5.0" step="0.1" value="2.0" oninput="document.getElementById('val-cfg').innerText=this.value">
+                        <input type="range" id="range-cfg" min="1.0" max="4.0" step="0.1" value="2.4" oninput="document.getElementById('val-cfg').innerText=this.value">
                     </div>
 
                     <div class="slider-group omni-only-param">
                         <div class="slider-header">
-                            <span>Độ biến hóa (Temperature):</span>
-                            <span class="slider-val" id="val-temp">5.0</span>
+                            <span>Độ biến hóa / Cảm xúc (Temperature):</span>
+                            <span class="slider-val" id="val-temp">0.10</span>
                         </div>
-                        <input type="range" id="range-temp" min="1.0" max="10.0" step="0.5" value="5.0" oninput="document.getElementById('val-temp').innerText=this.value">
+                        <input type="range" id="range-temp" min="0.0" max="0.5" step="0.05" value="0.10" oninput="document.getElementById('val-temp').innerText=parseFloat(this.value).toFixed(2)">
                     </div>
 
                     <div class="slider-group">
@@ -364,6 +369,10 @@
                     <button class="btn-merge-all" onclick="mergeAllAudioChunks()"><i class="fa-solid fa-layer-group"></i> GỘP CÁC ĐOẠN & DỌN DẸP FILE TẠM</button>
                 </div>
 
+                <button id="btn-download-chunks-zip" class="btn-secondary-block" type="button" onclick="downloadAllChunkAudioZip()" style="margin-top:10px; border:1px solid rgba(0,229,255,.45); color:#67E8F9; background:rgba(0,229,255,.08);">
+                    <i class="fa-solid fa-file-zipper"></i> TẢI CÁC ĐOẠN LẺ (.ZIP)
+                </button>
+
                 <div id="audio-result-card" class="result-card hidden">
                     <p style="color:#10B981; font-weight:700;"><i class="fa-solid fa-circle-check"></i> Siêu tạo âm thanh thành công!</p>
                     <audio id="audio-player" controls></audio>
@@ -373,8 +382,84 @@
         </div> <!-- KẾT THÚC STUDIO GRID -->
         </div> <!-- KẾT THÚC TAB 1 STUDIO (TAB-CONTENT-VOICE-STUDIO) -->
 
+        <!-- TAB VOICE CAPCUT: CHẠY QUA API BACKEND -->
+        <div id="tab-content-capcut" class="hidden" style="display:none;">
+            <div class="studio-grid">
+                <div class="panel-left">
+                    <div class="card-box">
+                        <div class="section-header-inline">
+                            <label for="capcut-text-input"><strong><i class="fa-solid fa-pen-to-square"></i> Kịch bản CapCut</strong></label>
+                            <button class="btn-import-file" onclick="capcutTriggerImport()"><i class="fa-solid fa-folder-open"></i> Import TXT</button>
+                            <input type="file" id="capcut-file-import" accept=".txt" class="hidden" onchange="capcutImportFile(event)">
+                        </div>
+                        <textarea id="capcut-text-input" placeholder="Nhập kịch bản cần tạo bằng giọng CapCut..." oninput="capcutUpdateCount()"></textarea>
+                        <div id="capcut-char-count" class="text-meta-bar"><i class="fa-solid fa-font"></i> Tổng số ký tự: <strong>0</strong></div>
+                        <div class="form-group-inline">
+                            <label for="capcut-chunk-mode"><strong><i class="fa-solid fa-scissors"></i> Cách chia đoạn:</strong></label>
+                            <select id="capcut-chunk-mode">
+                                <option value="sentence">Theo câu (. ! ?)</option>
+                                <option value="line">Theo dòng mới</option>
+                                <option value="300">Theo câu, tối đa 300 ký tự</option>
+                                <option value="500">Theo câu, tối đa 500 ký tự</option>
+                                <option value="800">Theo câu, tối đa 800 ký tự</option>
+                            </select>
+                        </div>
+                        <div class="grid-2-col">
+                            <button class="btn-primary" onclick="capcutSplitChunks()"><i class="fa-solid fa-bolt"></i> Chia đoạn</button>
+                            <button class="btn-secondary" onclick="capcutClearChunks()"><i class="fa-solid fa-eraser"></i> Xóa bảng</button>
+                        </div>
+                    </div>
+
+                    <div class="card-box">
+                        <label><strong><i class="fa-solid fa-list-check"></i> Bảng đoạn CapCut</strong></label>
+                        <div class="table-container">
+                            <table class="table-chunks">
+                                <thead><tr><th style="width:8%;">STT</th><th style="width:52%;">Nội dung</th><th style="width:15%;">Trạng thái</th><th style="width:25%;">Nghe / Tải</th></tr></thead>
+                                <tbody id="capcut-chunks-body"><tr><td colspan="4" style="text-align:center;color:#94A3B8;padding:20px;">Chưa có đoạn văn bản.</td></tr></tbody>
+                            </table>
+                        </div>
+                        <div class="action-buttons-group">
+                            <button class="btn-batch btn-batch-green" onclick="capcutGenerateAll()"><i class="fa-solid fa-play"></i> Tạo tất cả</button>
+                            <button class="btn-batch btn-batch-blue" onclick="capcutRetryErrors()"><i class="fa-solid fa-rotate-right"></i> Tạo lại lỗi</button>
+                            <button class="btn-batch btn-batch-cyan" id="capcut-merge-button" onclick="capcutMergeAllAudio()"><i class="fa-solid fa-layer-group"></i> Gộp tất cả</button>
+                            <button class="btn-batch btn-batch-red" onclick="capcutStopGenerate()"><i class="fa-solid fa-stop"></i> Dừng</button>
+                        </div>
+                        <div id="capcut-progress" class="progress-card hidden" style="margin-top:12px;"><div class="progress-info"><span id="capcut-progress-text">Đang chờ...</span><strong><span id="capcut-progress-percent">0</span>%</strong></div><div class="progress-bar-bg"><div id="capcut-progress-fill" class="progress-bar-fill" style="width:0%;"></div></div></div>
+                        <div id="capcut-merge-result" class="result-card hidden" style="margin-top:12px;">
+                            <p style="color:#10B981;font-weight:700;"><i class="fa-solid fa-circle-check"></i> Đã gộp toàn bộ đoạn CapCut</p>
+                            <audio id="capcut-merged-player" controls style="width:100%;"></audio>
+                            <a id="capcut-merged-download" href="#" download="HTH_CapCut_HoanChinh.wav" class="btn-secondary-block"><i class="fa-solid fa-download"></i> Tải file đã gộp (.wav)</a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel-right">
+                    <div class="card-box">
+                        <h3><i class="fa-solid fa-filter" style="color:#FFB547;"></i> Lọc & chọn voice CapCut</h3>
+                        <input id="capcut-voice-search" placeholder="Tìm tên voice, voice type..." oninput="capcutRenderVoices()">
+                        <div class="grid-2-col" style="margin-top:8px;">
+                            <select id="capcut-lang-filter" onchange="capcutRenderVoices()"><option value="">Tất cả ngôn ngữ</option></select>
+                            <select id="capcut-gender-filter" onchange="capcutRenderVoices()"><option value="">Tất cả giới tính</option><option value="female">Nữ</option><option value="male">Nam</option><option value="unknown">Chưa xác định</option></select>
+                        </div>
+                        <div style="margin-top:8px;">
+                            <select id="capcut-selected-voice" onchange="capcutSelectVoice(this.value)"><option value="">Đang tải voice...</option></select>
+                        </div>
+                        <div id="capcut-selected-voice-info" style="margin-top:10px;padding:10px 12px;border:1px solid rgba(255,181,71,.3);border-radius:9px;color:#CBD5E1;font-size:.82rem;">Chưa chọn voice.</div>
+                        <button type="button" class="btn-secondary" onclick="capcutPreviewVoice()" style="width:100%;margin-top:10px;"><i class="fa-solid fa-headphones"></i> Nghe thử voice đang chọn</button>
+                        <audio id="capcut-preview-player" controls preload="none" style="display:none;width:100%;margin-top:10px;"></audio>
+                        <div id="capcut-voice-list" style="display:flex;flex-direction:column;gap:8px;max-height:440px;overflow:auto;margin-top:12px;"></div>
+                    </div>
+                    <div class="card-box">
+                        <label><strong><i class="fa-solid fa-gauge-high"></i> Tùy chọn request</strong></label>
+                        <div class="form-group-inline"><label for="capcut-rate">Tốc độ:</label><input id="capcut-rate" type="number" min="0.5" max="2" step="0.1" value="1.0"></div>
+                        <p style="font-size:.8rem;color:#94A3B8;margin:8px 0 0;">Demo mặc định chạy tối đa 2 request đồng thời để tránh gửi dồn vào API CapCut.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- TAB 2: TAB GIÁM SÁT REALTIME MODAL GPU DASHBOARD (ĐẦY ĐỦ NHƯ MO_DASHBOARD_KIEM_TRA_ACC_MODAL.BAT) -->
-        <div id="tab-content-modal-dashboard" class="hidden">
+        <div id="tab-content-modal-dashboard" class="hidden" style="display:none!important">
             <div style="background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(16px); border: 1px solid rgba(0, 229, 255, 0.25); border-radius: 16px; padding: 24px; margin-bottom: 24px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 20px;">
                     <div style="display: flex; align-items: center; gap: 14px;">
@@ -481,7 +566,10 @@
                 <h4 style="color:#10B981; font-size:0.9rem; margin-bottom:10px;"><i class="fa-solid fa-user-plus"></i> Thêm Tài Khoản Mới:</h4>
                 <div class="grid-2-col">
                     <input type="text" id="new-user-name" placeholder="Tên tài khoản...">
-                    <input type="text" id="new-user-pass" placeholder="Mật khẩu...">
+                    <div class="password-input-wrap">
+                        <input type="password" id="new-user-pass" autocomplete="new-password" minlength="8" placeholder="Mật khẩu mới (tối thiểu 8 ký tự)...">
+                        <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('new-user-pass', this)" aria-label="Hiện mật khẩu" title="Hiện/ẩn mật khẩu"><i class="fa-solid fa-eye"></i></button>
+                    </div>
                 </div>
                 <div class="grid-2-col" style="margin-top: 8px;">
                     <input type="number" id="new-user-quota" placeholder="Hạn mức KÝ TỰ (mặc định 100,000)..." value="100000">
@@ -543,6 +631,35 @@
         </div>
     </div>
 
+    <!-- MODAL SỬA MẬT KHẨU USER -->
+    <div id="edit-password-modal" class="modal-overlay hidden">
+        <div class="modal-card" style="max-width: 440px; border-color: rgba(168, 85, 247, 0.5);">
+            <button class="modal-close" onclick="closeEditUserPassword()">&times;</button>
+            <h3 style="color: #C084FC; margin-bottom: 12px;"><i class="fa-solid fa-key"></i> Đổi Mật Khẩu</h3>
+            <p id="edit-password-user-title" style="color: #CBD5E1; font-size: 0.9rem; margin-bottom: 16px;">Tài khoản</p>
+
+            <div style="margin-bottom: 12px;">
+                <label for="input-modal-new-password" style="font-size: 0.85rem; color: #94A3B8; display: block; margin-bottom: 6px;">Mật khẩu mới:</label>
+                <div class="password-input-wrap">
+                    <input type="password" id="input-modal-new-password" autocomplete="new-password" minlength="8" style="padding: 12px 16px; background: rgba(0,0,0,0.4); border: 1px solid rgba(168,85,247,0.4); border-radius: 8px; color: #FFF; font-size: 1rem;" placeholder="Tối thiểu 8 ký tự">
+                    <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('input-modal-new-password', this)" aria-label="Hiện mật khẩu" title="Hiện/ẩn mật khẩu"><i class="fa-solid fa-eye"></i></button>
+                </div>
+            </div>
+            <div style="margin-bottom: 20px;">
+                <label for="input-modal-confirm-password" style="font-size: 0.85rem; color: #94A3B8; display: block; margin-bottom: 6px;">Nhập lại mật khẩu:</label>
+                <div class="password-input-wrap">
+                    <input type="password" id="input-modal-confirm-password" autocomplete="new-password" minlength="8" style="padding: 12px 16px; background: rgba(0,0,0,0.4); border: 1px solid rgba(168,85,247,0.4); border-radius: 8px; color: #FFF; font-size: 1rem;" placeholder="Nhập lại mật khẩu mới">
+                    <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('input-modal-confirm-password', this)" aria-label="Hiện mật khẩu" title="Hiện/ẩn mật khẩu"><i class="fa-solid fa-eye"></i></button>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button class="btn-import-file" onclick="closeEditUserPassword()" style="padding: 9px 18px; background: rgba(255,255,255,0.08); color: #CBD5E1;">Hủy</button>
+                <button onclick="submitEditUserPassword()" class="btn-import-file" style="padding: 9px 22px; background: linear-gradient(135deg, #8B5CF6, #7C3AED); color: #FFF; font-weight: 700; border: none;">Lưu Mật Khẩu</button>
+            </div>
+        </div>
+    </div>
+
     <!-- MODAL DUYỆT BẢNG GIỌNG ĐỌC CÓ NÚT PLAY TRỰC TIẾP TỪNG VOICE VÀ BỘ LỌC ĐẦY ĐỦ -->
     <div id="voice-browser-modal" class="modal-overlay hidden" style="display: none;">
         <div class="modal-card" style="max-width: 880px; width: 92%; max-height: 88vh; display: flex; flex-direction: column; border-color: rgba(0, 229, 255, 0.4);">
@@ -579,6 +696,7 @@
     </div>
 
     <script>window.startTime = Date.now(); window._chunkStartTime = Date.now();</script>
-    <script src="app_v3.js?v=3.0.0_FORCE_REFRESH"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="app.js?v=20260917_STEPS48_AND_QUALITY_V2"></script>
 </body>
 </html>

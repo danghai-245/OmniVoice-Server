@@ -27,8 +27,8 @@ let modalGpuUrls = [
 
 let usersDatabase = {
     "USERS": {
-        "admin-0405": { "password": "Hth1624!", "quota": 99999999, "used": 0, "role": "Admin VIP" },
-        "tester": { "password": "123", "quota": 100000, "used": 0, "role": "Dùng thử" }
+        "admin-0405": { "password": "pbkdf2-sha256$120000$aHRoLWFkbWluLXNhbHQtdjE=$H+0pdQBJE1bQIX/8/5uFz1hx1JSSIqs3c9K6jlNtBjg=", "quota": 99999999, "used": 0, "role": "Admin VIP" },
+        "tester": { "password": "pbkdf2-sha256$120000$aHRoLXRlc3Rlci1zYWx0LXYx$WbjN4jQqw5wjq0p8K0WHO7RYQCtmjNHypNhLaH3432g=", "quota": 100000, "used": 0, "role": "Dùng thử" }
     }
 };
 
@@ -83,7 +83,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     loadSavedGeminiKey();
-    loadLocalUserCache();
+    await loadLocalUserCache();
     
     // Nạp cấu hình ngầm bất đồng bộ không block giao diện
     loadServerConfigFromGist().catch(err => console.warn("Lỗi nạp Supabase ngầm:", err));
@@ -142,7 +142,7 @@ function onAiEngineChange() {
 }
 
 // CACHE DỮ LIỆU TÀI KHOẢN TRÁNH BỊ MẤT KHI F5 VÀ KHÔNG BỊ BÁO SAI MẬT KHẨU
-function loadLocalUserCache() {
+async function loadLocalUserCache() {
     try {
         const cached = localStorage.getItem("hth_users_database");
         if (cached) {
@@ -151,6 +151,7 @@ function loadLocalUserCache() {
                 usersDatabase = parsed;
             }
         }
+        await migrateLegacyPasswords(false);
     } catch (e) {
         console.error("Lỗi đọc cache local user:", e);
     }
@@ -162,6 +163,68 @@ function saveLocalUserCache() {
     } catch (e) {
         console.error("Lỗi lưu cache local user:", e);
     }
+}
+
+const PASSWORD_HASH_ALGORITHM = "pbkdf2-sha256";
+const PASSWORD_HASH_ITERATIONS = 120000;
+
+function bytesToBase64(bytes) {
+    let binary = "";
+    bytes.forEach(byte => { binary += String.fromCharCode(byte); });
+    return btoa(binary);
+}
+
+function base64ToBytes(value) {
+    const binary = atob(value);
+    return Uint8Array.from(binary, char => char.charCodeAt(0));
+}
+
+function isPasswordHash(value) {
+    return typeof value === "string" && value.startsWith(`${PASSWORD_HASH_ALGORITHM}$`);
+}
+
+async function hashPassword(password, saltBytes = null) {
+    const salt = saltBytes || crypto.getRandomValues(new Uint8Array(16));
+    const material = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
+    const derived = await crypto.subtle.deriveBits(
+        { name: "PBKDF2", salt, iterations: PASSWORD_HASH_ITERATIONS, hash: "SHA-256" },
+        material,
+        256
+    );
+    return `${PASSWORD_HASH_ALGORITHM}$${PASSWORD_HASH_ITERATIONS}$${bytesToBase64(salt)}$${bytesToBase64(new Uint8Array(derived))}`;
+}
+
+async function verifyPassword(password, storedPassword) {
+    if (typeof storedPassword !== "string" || !storedPassword) return false;
+    if (!isPasswordHash(storedPassword)) return storedPassword.trim() === password;
+    const parts = storedPassword.split("$");
+    if (parts.length !== 4 || Number(parts[1]) !== PASSWORD_HASH_ITERATIONS) return false;
+    try {
+        const candidate = await hashPassword(password, base64ToBytes(parts[2]));
+        const a = new TextEncoder().encode(candidate);
+        const b = new TextEncoder().encode(storedPassword);
+        if (a.length !== b.length) return false;
+        let diff = 0;
+        for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+        return diff === 0;
+    } catch (e) {
+        return false;
+    }
+}
+
+async function migrateLegacyPasswords(syncRemote = true) {
+    let changed = false;
+    for (const account of Object.values(usersDatabase.USERS || {})) {
+        if (account && typeof account.password === "string" && !isPasswordHash(account.password)) {
+            account.password = await hashPassword(account.password);
+            changed = true;
+        }
+    }
+    if (changed) {
+        saveLocalUserCache();
+        if (syncRemote) await syncUsersToGist();
+    }
+    return changed;
 }
 
 const SUPABASE_PROJECT_ID = "jdhjimqktyiwffueaksh";
@@ -202,6 +265,7 @@ async function loadServerConfigFromGist() {
             }
             if (data.users) {
                 usersDatabase.USERS = data.users;
+                await migrateLegacyPasswords();
                 saveLocalUserCache();
                 console.log("Nạp thành công cấu hình Supabase Realtime:", usersDatabase.USERS);
             }
@@ -646,9 +710,7 @@ function writeString(view, offset, string) {
 }
 
 async function processSingleChunk(idx, workerId = 0) {
-    var startTime = Date.now();
-    var _chunkStartTime = Date.now();
-    var chunkStartTime = Date.now();
+    const requestStartTime = Date.now();
     var curTime = Date.now();
     const item = currentChunksList[idx];
     if (!currentUser) { openAuthModal(); return; }
@@ -683,7 +745,11 @@ async function processSingleChunk(idx, workerId = 0) {
     }
 
     try {
-        const speedVal = parseFloat(document.getElementById("input-speech-speed")?.value || 1.0);
+        const speedVal = parseFloat(
+            document.getElementById("range-speed")?.value ||
+            document.getElementById("input-speech-speed")?.value ||
+            1.0
+        );
         
         // Chuẩn hóa văn bản sạch
         let cleanText = item.text || "";
@@ -724,12 +790,36 @@ async function processSingleChunk(idx, workerId = 0) {
             refAudioBase64 = await getVoiceBase64(refAudioUrl);
         }
 
-        addAppLog(`Gửi lệnh GPU Đoạn ${item.id} (Giọng: "${selectedVoiceName || 'Mặc định'}"): "${cleanText.substring(0, 30)}..."`);
+        // 1. Tự động xác định ngôn ngữ theo Voice mà user đã chọn
+        let resolvedLang = "vi";
+        const manualLang = document.getElementById("select-target-lang")?.value;
+        if (manualLang && manualLang !== "auto") {
+            resolvedLang = manualLang;
+        } else {
+            resolvedLang = detectVoiceLanguage(voiceMeta, cleanText || item.text);
+        }
 
-        // Chuẩn bị payload siêu gọn nhẹ
+        // 2. Thu thập các tham số tinh chỉnh chất lượng âm thanh từ giao diện
+        const cfgVal = parseFloat(document.getElementById("range-cfg")?.value || 2.4);
+        const stepsVal = parseInt(document.getElementById("range-steps")?.value || 48, 10);
+        const tempVal = parseFloat(document.getElementById("range-temp")?.value || 0.1);
+        const denoiseVal = document.getElementById("check-denoise") ? document.getElementById("check-denoise").checked : true;
+
+        addAppLog(`Gửi lệnh GPU Đoạn ${item.id} (Giọng: "${selectedVoiceName || 'Mặc định'}", Ngôn ngữ: [${resolvedLang.toUpperCase()}], CFG: ${cfgVal}, Steps: ${stepsVal}): "${cleanText.substring(0, 30)}..."`);
+
+        // Chuẩn bị payload hoàn chỉnh gửi lên GPU
         const requestPayload = {
             text: cleanText || item.text,
             speed: speedVal,
+            language: resolvedLang,
+            lang: resolvedLang,
+            guidance_scale: cfgVal,
+            cfg: cfgVal,
+            num_step: stepsVal,
+            steps: stepsVal,
+            class_temperature: tempVal,
+            temperature: tempVal,
+            denoise: denoiseVal,
             voice_name: selectedVoiceName,
             voice: selectedVoiceName,
             voice_id: voiceId,
@@ -796,7 +886,7 @@ async function processSingleChunk(idx, workerId = 0) {
 
             // Update Billing/Quota an toàn tuyệt đối
             try {
-                const elapsedSec = Math.max(1.0, (Date.now() - chunkStartTime) / 1000);
+                const elapsedSec = Math.max(1.0, (Date.now() - requestStartTime) / 1000);
                 const costUsd = Math.max(0.0015, (elapsedSec * 0.00035) + ((cleanText || item.text).length * 0.000005));
                 if (typeof trackGpuBillingUsage === "function") trackGpuBillingUsage(gpuUrl, costUsd);
                 if (typeof currentUser !== "undefined" && currentUser && typeof currentUser.used === "number") {
@@ -1298,6 +1388,67 @@ function formatLangName(code) {
     return GLOBAL_LANG_MAP[key] || code;
 }
 
+function detectTextLanguage(text) {
+    if (!text || typeof text !== "string") return "vi";
+    const str = text.trim();
+    if (!str) return "vi";
+
+    // Tiếng Việt có dấu đặc trưng
+    if (/[àáảãạăắằẳẵặâấầẩẫậđèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳỷỹỵđ]/i.test(str)) {
+        return "vi";
+    }
+    // Chữ Hán (Trung Quốc)
+    if (/[\u4e00-\u9fa5]/.test(str)) return "zh";
+    // Tiếng Nhật (Hiragana, Katakana)
+    if (/[\u3040-\u30ff]/.test(str)) return "ja";
+    // Tiếng Hàn (Hangul)
+    if (/[\uac00-\ud7af]/.test(str)) return "ko";
+
+    return "en";
+}
+
+function detectVoiceLanguage(voiceMeta, sampleText = "") {
+    if (!voiceMeta) {
+        return detectTextLanguage(sampleText);
+    }
+
+    const vid = (voiceMeta.voiceId || "").toLowerCase();
+    const vlang = (voiceMeta.lang || "").toLowerCase();
+    const vfname = (voiceMeta.filename || "").toLowerCase();
+
+    // 1. Nhận diện theo prefix / pattern Voice ID (rất chính xác cho EverAI và chuẩn naming)
+    if (vid.startsWith("vi_") || vid.includes("_vivn_") || vid.includes("_vi_") || vid.includes("vietnam")) return "vi";
+    if (vid.startsWith("en_") || vid.includes("_en_") || vid.includes("_us_") || vid.includes("_uk_") || vid.includes("_au_")) return "en";
+    if (vid.startsWith("zh_") || vid.includes("_zh_") || vid.includes("_cmn_") || vid.includes("china")) return "zh";
+    if (vid.startsWith("jp_") || vid.startsWith("ja_") || vid.includes("_jp_") || vid.includes("_ja_") || vid.includes("japan")) return "ja";
+    if (vid.startsWith("kr_") || vid.startsWith("ko_") || vid.includes("_kr_") || vid.includes("_ko_") || vid.includes("korea")) return "ko";
+    if (vid.startsWith("fr_") || vid.includes("_fr_") || vid.includes("france") || vid.includes("french")) return "fr";
+    if (vid.startsWith("es_") || vid.includes("_es_") || vid.includes("spain") || vid.includes("spanish")) return "es";
+    if (vid.startsWith("de_") || vid.includes("_de_") || vid.includes("german")) return "de";
+    if (vid.startsWith("ru_") || vid.includes("_ru_") || vid.includes("russia")) return "ru";
+    if (vid.startsWith("pt_") || vid.includes("_pt_") || vid.includes("portugal") || vid.includes("brazil")) return "pt";
+    if (vid.startsWith("it_") || vid.includes("_it_") || vid.includes("italian")) return "it";
+    if (vid.startsWith("hi_") || vid.includes("_hi_") || vid.includes("hindi") || vid.includes("india")) return "hi";
+    if (vid.startsWith("th_") || vid.includes("_th_") || vid.includes("thai")) return "th";
+    if (vid.startsWith("id_") || vid.includes("_id_") || vid.includes("indonesia")) return "id";
+
+    // 2. Nhận diện theo tên ngôn ngữ / tên file
+    if (vlang.includes("việt") || vfname.includes("tiếng việt") || vlang.includes("vietnamese")) return "vi";
+    if (vlang.includes("tiếng trung") || vfname.includes("tiếng trung") || vlang.includes("chinese")) return "zh";
+    if (vlang.includes("tiếng nhật") || vfname.includes("tiếng nhật") || vlang.includes("japanese")) return "ja";
+    if (vlang.includes("tiếng hàn") || vfname.includes("tiếng hàn") || vlang.includes("korean")) return "ko";
+    if (vlang.includes("tiếng pháp") || vfname.includes("tiếng pháp") || vlang.includes("french")) return "fr";
+    if (vlang.includes("tây ban nha") || vfname.includes("tây ban nha") || vlang.includes("spanish")) return "es";
+    if (vlang.includes("tiếng đức") || vfname.includes("tiếng đức") || vlang.includes("german")) return "de";
+    if (vlang.includes("tiếng nga") || vfname.includes("tiếng nga") || vlang.includes("russian")) return "ru";
+    if (vlang.includes("bồ đào nha") || vfname.includes("bồ đào nha") || vlang.includes("portuguese")) return "pt";
+    if (vlang.includes("tiếng ý") || vfname.includes("tiếng ý") || vlang.includes("italian")) return "it";
+    if (vlang.includes("tiếng anh") || vfname.includes("tiếng anh") || vlang.includes("english")) return "en";
+
+    // 3. Nếu là giọng Đa ngôn ngữ (ElevenLabs Multilingual) -> nhận diện theo ngữ cảnh văn bản
+    return detectTextLanguage(sampleText);
+}
+
 function populateFilters() {
     const rawLangsSet = new Set();
     allVoiceMetadata.forEach(v => {
@@ -1514,7 +1665,28 @@ function selectVoiceFromBrowserModal(voiceName) {
         currentNameEl.innerText = voiceName;
     }
 
-    showToast("Đã Chọn Giọng", `Đã thiết lập giọng đọc chính: ${voiceName}`, "success");
+    // Tự động nhận diện ngôn ngữ của voice được chọn và đồng bộ vào dropdown
+    const matchedVoice = allVoiceMetadata.find(v => v.name === voiceName);
+    const detectedLang = detectVoiceLanguage(matchedVoice, "");
+
+    const targetLangSelect = document.getElementById("select-target-lang");
+    if (targetLangSelect && detectedLang) {
+        const hasOption = Array.from(targetLangSelect.options).some(o => o.value === detectedLang);
+        if (hasOption) {
+            targetLangSelect.value = detectedLang;
+        } else {
+            targetLangSelect.value = "auto";
+        }
+    }
+
+    const langDisplayMap = {
+        "vi": "Tiếng Việt", "en": "Tiếng Anh", "zh": "Tiếng Trung",
+        "ja": "Tiếng Nhật", "ko": "Tiếng Hàn", "fr": "Tiếng Pháp",
+        "es": "Tiếng Tây Ban Nha", "de": "Tiếng Đức", "ru": "Tiếng Nga"
+    };
+    const langLabel = langDisplayMap[detectedLang] || detectedLang.toUpperCase();
+
+    showToast("Đã Chọn Giọng", `Đã thiết lập giọng: ${voiceName} (${langLabel})`, "success");
     closeVoiceBrowserModal();
 }
 
@@ -1584,7 +1756,13 @@ async function submitAuth() {
         }
     });
 
-    if (foundAcc && (foundAcc.password === passInput || foundAcc.password.trim() === passInput)) {
+    const passwordValid = foundAcc ? await verifyPassword(passInput, foundAcc.password) : false;
+    if (foundAcc && passwordValid) {
+        if (!isPasswordHash(foundAcc.password)) {
+            foundAcc.password = await hashPassword(passInput);
+            saveLocalUserCache();
+            syncUsersToGist().catch(() => {});
+        }
         // KHÔI PHỤC BẢO TOÀN SỐ KÝ TỰ ĐÃ SỬ DỤNG CHỐNG RESET VỀ 0
         const savedUsed = localStorage.getItem(`quota_used_${foundUsername.toLowerCase()}`);
         let actualUsed = foundAcc.used || 0;
@@ -1706,11 +1884,11 @@ function closeAdminModal() {
     document.getElementById("admin-modal").classList.add("hidden");
 }
 
-function copyUserAccountInfo(username, password) {
-    const textToCopy = `Tài khoản: ${username}\nMật khẩu: ${password}`;
+function copyUserAccountInfo(username) {
+    const textToCopy = `Tài khoản: ${username}`;
     if (navigator.clipboard && window.isSecureContext) {
         navigator.clipboard.writeText(textToCopy).then(() => {
-            showToast("Đã Sao Chép", `Đã copy Tài khoản: "${username}" và Mật khẩu vào Bộ nhớ tạm!`, "success");
+            showToast("Đã Sao Chép", `Đã copy Tài khoản: "${username}" vào Bộ nhớ tạm!`, "success");
         }).catch(() => {
             fallbackCopyTextToClipboard(textToCopy, username);
         });
@@ -1729,7 +1907,7 @@ function fallbackCopyTextToClipboard(text, username) {
     textArea.select();
     try {
         document.execCommand('copy');
-        showToast("Đã Sao Chép", `Đã copy Tài khoản: "${username}" và Mật khẩu vào Bộ nhớ tạm!`, "success");
+        showToast("Đã Sao Chép", `Đã copy Tài khoản: "${username}" vào Bộ nhớ tạm!`, "success");
     } catch (err) {
         showToast("Lỗi Sao Chép", "Không thể chép vào Clipboard thiết bị!", "error");
     }
@@ -1746,13 +1924,13 @@ function renderUserList() {
         const u = usersDatabase.USERS[username];
         const tr = document.createElement("tr");
 
-        const passDisplay = isAdmin ? `<code>${u.password}</code>` : '<code>••••••••</code>';
+        const passDisplay = '<code style="color:#10B981;">Đã mã hóa</code>';
 
         tr.innerHTML = `
             <td>
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
                     <strong>${username}</strong>
-                    <button type="button" onclick="copyUserAccountInfo('${username}', '${u.password}')" title="Copy Tài khoản & Mật khẩu" style="background: rgba(0, 229, 255, 0.15); border: 1px solid rgba(0, 229, 255, 0.4); color: #00E5FF; padding: 2px 8px; border-radius: 6px; cursor: pointer; font-size: 0.72rem; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
+                    <button type="button" onclick="copyUserAccountInfo('${username}')" title="Copy Tài khoản" style="background: rgba(0, 229, 255, 0.15); border: 1px solid rgba(0, 229, 255, 0.4); color: #00E5FF; padding: 2px 8px; border-radius: 6px; cursor: pointer; font-size: 0.72rem; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
                         <i class="fa-solid fa-copy"></i> Copy
                     </button>
                 </div>
@@ -1760,15 +1938,13 @@ function renderUserList() {
             <td>
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
                     ${passDisplay}
-                    <button type="button" onclick="copyUserAccountInfo('${username}', '${u.password}')" title="Copy Cặp TK/MK" style="background: rgba(124, 77, 255, 0.15); border: 1px solid rgba(124, 77, 255, 0.4); color: #B388FF; padding: 2px 8px; border-radius: 6px; cursor: pointer; font-size: 0.72rem; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
-                        <i class="fa-solid fa-key"></i> Copy MK
-                    </button>
                 </div>
             </td>
             <td>${u.used.toLocaleString('vi-VN')} / ${u.quota.toLocaleString('vi-VN')} ký tự</td>
             <td><span class="badge-role">${u.role}</span></td>
             <td>
-                <button type="button" class="btn-action-edit" onclick="copyUserAccountInfo('${username}', '${u.password}')" style="background: rgba(0, 229, 255, 0.15); border: 1px solid rgba(0, 229, 255, 0.4); color: #00E5FF; margin-right: 4px;" title="Copy Tài khoản & Mật khẩu vào Clipboard"><i class="fa-solid fa-copy"></i> Copy TK/MK</button>
+                <button type="button" class="btn-action-edit" onclick="copyUserAccountInfo('${username}')" style="background: rgba(0, 229, 255, 0.15); border: 1px solid rgba(0, 229, 255, 0.4); color: #00E5FF; margin-right: 4px;" title="Copy Tài khoản vào Clipboard"><i class="fa-solid fa-copy"></i> Copy TK</button>
+                ${isAdmin ? `<button class="btn-action-edit" onclick="editUserPassword('${username}')"><i class="fa-solid fa-key"></i> Sửa Mật khẩu</button>` : ''}
                 ${isAdmin ? `<button class="btn-action-edit" onclick="editUserQuota('${username}')"><i class="fa-solid fa-pen"></i> Sửa Ký Tự</button>` : ''}
                 ${isAdmin && !username.toLowerCase().includes('admin') ? `<button class="btn-action-del" onclick="deleteUser('${username}')"><i class="fa-solid fa-trash"></i> Xóa</button>` : ''}
             </td>
@@ -1831,7 +2007,7 @@ async function addNewUser() {
         return;
     }
 
-    usersDatabase.USERS[name] = { password: pass, quota: quota, used: 0, role: role };
+    usersDatabase.USERS[name] = { password: await hashPassword(pass), quota: quota, used: 0, role: role };
     document.getElementById("new-user-name").value = "";
     document.getElementById("new-user-pass").value = "";
     renderUserList();
@@ -1841,6 +2017,7 @@ async function addNewUser() {
 }
 
 let pendingDeleteUsername = "";
+let pendingEditPasswordUsername = "";
 let pendingEditQuotaUsername = "";
 
 function deleteUser(username) {
@@ -1870,6 +2047,50 @@ async function executeDeleteUser() {
     renderUserList();
     await syncUsersToGist();
     showToast("Đã Xóa Tài Khoản", `Đã xóa vĩnh viễn tài khoản "${targetUser}" khỏi hệ thống!`, "warning");
+}
+
+function editUserPassword(username) {
+    const isAdmin = currentUser && (String(currentUser.role || "").includes("Admin") || currentUser.username.toLowerCase().includes("admin"));
+    if (!isAdmin || !usersDatabase.USERS[username]) return;
+    pendingEditPasswordUsername = username;
+    const titleEl = document.getElementById("edit-password-user-title");
+    if (titleEl) titleEl.innerText = `Tài khoản: "${username}"`;
+    document.getElementById("input-modal-new-password").value = "";
+    document.getElementById("input-modal-confirm-password").value = "";
+    document.getElementById("edit-password-modal").classList.remove("hidden");
+    setTimeout(() => document.getElementById("input-modal-new-password")?.focus(), 100);
+}
+
+function closeEditUserPassword() {
+    document.getElementById("edit-password-modal")?.classList.add("hidden");
+    pendingEditPasswordUsername = "";
+}
+
+async function submitEditUserPassword() {
+    const isAdmin = currentUser && (String(currentUser.role || "").includes("Admin") || currentUser.username.toLowerCase().includes("admin"));
+    if (!isAdmin || !pendingEditPasswordUsername) return;
+    const newPassword = document.getElementById("input-modal-new-password").value;
+    const confirmPassword = document.getElementById("input-modal-confirm-password").value;
+    if (newPassword.length < 8) {
+        showToast("Mật khẩu quá ngắn", "Mật khẩu mới phải có ít nhất 8 ký tự.", "error");
+        return;
+    }
+    if (newPassword !== confirmPassword) {
+        showToast("Mật khẩu không khớp", "Vui lòng nhập lại đúng mật khẩu mới.", "error");
+        return;
+    }
+    try {
+        const hashedPassword = await hashPassword(newPassword);
+        usersDatabase.USERS[pendingEditPasswordUsername].password = hashedPassword;
+        saveLocalUserCache();
+        renderUserList();
+        const username = pendingEditPasswordUsername;
+        closeEditUserPassword();
+        await syncUsersToGist();
+        showToast("Đổi mật khẩu thành công", `Đã cập nhật mật khẩu cho tài khoản "${username}".`, "success");
+    } catch (e) {
+        showToast("Không thể đổi mật khẩu", "Trình duyệt không hỗ trợ mã hóa hoặc đồng bộ thất bại.", "error");
+    }
 }
 
 function editUserQuota(username) {

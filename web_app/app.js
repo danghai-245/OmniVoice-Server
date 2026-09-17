@@ -683,7 +683,11 @@ async function processSingleChunk(idx, workerId = 0) {
     }
 
     try {
-        const speedVal = parseFloat(document.getElementById("input-speech-speed")?.value || 1.0);
+        const speedVal = parseFloat(
+            document.getElementById("range-speed")?.value ||
+            document.getElementById("input-speech-speed")?.value ||
+            1.0
+        );
         
         // Chuẩn hóa văn bản sạch
         let cleanText = item.text || "";
@@ -724,12 +728,36 @@ async function processSingleChunk(idx, workerId = 0) {
             refAudioBase64 = await getVoiceBase64(refAudioUrl);
         }
 
-        addAppLog(`Gửi lệnh GPU Đoạn ${item.id} (Giọng: "${selectedVoiceName || 'Mặc định'}"): "${cleanText.substring(0, 30)}..."`);
+        // 1. Tự động xác định ngôn ngữ theo Voice mà user đã chọn
+        let resolvedLang = "vi";
+        const manualLang = document.getElementById("select-target-lang")?.value;
+        if (manualLang && manualLang !== "auto") {
+            resolvedLang = manualLang;
+        } else {
+            resolvedLang = detectVoiceLanguage(voiceMeta, cleanText || item.text);
+        }
 
-        // Chuẩn bị payload siêu gọn nhẹ
+        // 2. Thu thập các tham số tinh chỉnh chất lượng âm thanh từ giao diện
+        const cfgVal = parseFloat(document.getElementById("range-cfg")?.value || 2.4);
+        const stepsVal = parseInt(document.getElementById("range-steps")?.value || 48, 10);
+        const tempVal = parseFloat(document.getElementById("range-temp")?.value || 0.1);
+        const denoiseVal = document.getElementById("check-denoise") ? document.getElementById("check-denoise").checked : true;
+
+        addAppLog(`Gửi lệnh GPU Đoạn ${item.id} (Giọng: "${selectedVoiceName || 'Mặc định'}", Ngôn ngữ: [${resolvedLang.toUpperCase()}], CFG: ${cfgVal}, Steps: ${stepsVal}): "${cleanText.substring(0, 30)}..."`);
+
+        // Chuẩn bị payload hoàn chỉnh gửi lên GPU
         const requestPayload = {
             text: cleanText || item.text,
             speed: speedVal,
+            language: resolvedLang,
+            lang: resolvedLang,
+            guidance_scale: cfgVal,
+            cfg: cfgVal,
+            num_step: stepsVal,
+            steps: stepsVal,
+            class_temperature: tempVal,
+            temperature: tempVal,
+            denoise: denoiseVal,
             voice_name: selectedVoiceName,
             voice: selectedVoiceName,
             voice_id: voiceId,
@@ -1298,6 +1326,67 @@ function formatLangName(code) {
     return GLOBAL_LANG_MAP[key] || code;
 }
 
+function detectTextLanguage(text) {
+    if (!text || typeof text !== "string") return "vi";
+    const str = text.trim();
+    if (!str) return "vi";
+
+    // Tiếng Việt có dấu đặc trưng
+    if (/[àáảãạăắằẳẵặâấầẩẫậđèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳỷỹỵđ]/i.test(str)) {
+        return "vi";
+    }
+    // Chữ Hán (Trung Quốc)
+    if (/[\u4e00-\u9fa5]/.test(str)) return "zh";
+    // Tiếng Nhật (Hiragana, Katakana)
+    if (/[\u3040-\u30ff]/.test(str)) return "ja";
+    // Tiếng Hàn (Hangul)
+    if (/[\uac00-\ud7af]/.test(str)) return "ko";
+
+    return "en";
+}
+
+function detectVoiceLanguage(voiceMeta, sampleText = "") {
+    if (!voiceMeta) {
+        return detectTextLanguage(sampleText);
+    }
+
+    const vid = (voiceMeta.voiceId || "").toLowerCase();
+    const vlang = (voiceMeta.lang || "").toLowerCase();
+    const vfname = (voiceMeta.filename || "").toLowerCase();
+
+    // 1. Nhận diện theo prefix / pattern Voice ID (rất chính xác cho EverAI và chuẩn naming)
+    if (vid.startsWith("vi_") || vid.includes("_vivn_") || vid.includes("_vi_") || vid.includes("vietnam")) return "vi";
+    if (vid.startsWith("en_") || vid.includes("_en_") || vid.includes("_us_") || vid.includes("_uk_") || vid.includes("_au_")) return "en";
+    if (vid.startsWith("zh_") || vid.includes("_zh_") || vid.includes("_cmn_") || vid.includes("china")) return "zh";
+    if (vid.startsWith("jp_") || vid.startsWith("ja_") || vid.includes("_jp_") || vid.includes("_ja_") || vid.includes("japan")) return "ja";
+    if (vid.startsWith("kr_") || vid.startsWith("ko_") || vid.includes("_kr_") || vid.includes("_ko_") || vid.includes("korea")) return "ko";
+    if (vid.startsWith("fr_") || vid.includes("_fr_") || vid.includes("france") || vid.includes("french")) return "fr";
+    if (vid.startsWith("es_") || vid.includes("_es_") || vid.includes("spain") || vid.includes("spanish")) return "es";
+    if (vid.startsWith("de_") || vid.includes("_de_") || vid.includes("german")) return "de";
+    if (vid.startsWith("ru_") || vid.includes("_ru_") || vid.includes("russia")) return "ru";
+    if (vid.startsWith("pt_") || vid.includes("_pt_") || vid.includes("portugal") || vid.includes("brazil")) return "pt";
+    if (vid.startsWith("it_") || vid.includes("_it_") || vid.includes("italian")) return "it";
+    if (vid.startsWith("hi_") || vid.includes("_hi_") || vid.includes("hindi") || vid.includes("india")) return "hi";
+    if (vid.startsWith("th_") || vid.includes("_th_") || vid.includes("thai")) return "th";
+    if (vid.startsWith("id_") || vid.includes("_id_") || vid.includes("indonesia")) return "id";
+
+    // 2. Nhận diện theo tên ngôn ngữ / tên file
+    if (vlang.includes("việt") || vfname.includes("tiếng việt") || vlang.includes("vietnamese")) return "vi";
+    if (vlang.includes("tiếng trung") || vfname.includes("tiếng trung") || vlang.includes("chinese")) return "zh";
+    if (vlang.includes("tiếng nhật") || vfname.includes("tiếng nhật") || vlang.includes("japanese")) return "ja";
+    if (vlang.includes("tiếng hàn") || vfname.includes("tiếng hàn") || vlang.includes("korean")) return "ko";
+    if (vlang.includes("tiếng pháp") || vfname.includes("tiếng pháp") || vlang.includes("french")) return "fr";
+    if (vlang.includes("tây ban nha") || vfname.includes("tây ban nha") || vlang.includes("spanish")) return "es";
+    if (vlang.includes("tiếng đức") || vfname.includes("tiếng đức") || vlang.includes("german")) return "de";
+    if (vlang.includes("tiếng nga") || vfname.includes("tiếng nga") || vlang.includes("russian")) return "ru";
+    if (vlang.includes("bồ đào nha") || vfname.includes("bồ đào nha") || vlang.includes("portuguese")) return "pt";
+    if (vlang.includes("tiếng ý") || vfname.includes("tiếng ý") || vlang.includes("italian")) return "it";
+    if (vlang.includes("tiếng anh") || vfname.includes("tiếng anh") || vlang.includes("english")) return "en";
+
+    // 3. Nếu là giọng Đa ngôn ngữ (ElevenLabs Multilingual) -> nhận diện theo ngữ cảnh văn bản
+    return detectTextLanguage(sampleText);
+}
+
 function populateFilters() {
     const rawLangsSet = new Set();
     allVoiceMetadata.forEach(v => {
@@ -1514,7 +1603,29 @@ function selectVoiceFromBrowserModal(voiceName) {
         currentNameEl.innerText = voiceName;
     }
 
-    showToast("Đã Chọn Giọng", `Đã thiết lập giọng đọc chính: ${voiceName}`, "success");
+    // Tự động nhận diện ngôn ngữ của voice được chọn và đồng bộ vào dropdown
+    const matchedVoice = allVoiceMetadata.find(v => v.name === voiceName);
+    const detectedLang = detectVoiceLanguage(matchedVoice, "");
+
+    const targetLangSelect = document.getElementById("select-target-lang");
+    if (targetLangSelect && detectedLang) {
+        // Nếu select có option ngôn ngữ tương ứng thì chọn ngay, hoặc nếu có option auto
+        const hasOption = Array.from(targetLangSelect.options).some(o => o.value === detectedLang);
+        if (hasOption) {
+            targetLangSelect.value = detectedLang;
+        } else {
+            targetLangSelect.value = "auto";
+        }
+    }
+
+    const langDisplayMap = {
+        "vi": "Tiếng Việt", "en": "Tiếng Anh", "zh": "Tiếng Trung",
+        "ja": "Tiếng Nhật", "ko": "Tiếng Hàn", "fr": "Tiếng Pháp",
+        "es": "Tiếng Tây Ban Nha", "de": "Tiếng Đức", "ru": "Tiếng Nga"
+    };
+    const langLabel = langDisplayMap[detectedLang] || detectedLang.toUpperCase();
+
+    showToast("Đã Chọn Giọng", `Đã thiết lập giọng: ${voiceName} (${langLabel})`, "success");
     closeVoiceBrowserModal();
 }
 
