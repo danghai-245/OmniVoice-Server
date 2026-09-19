@@ -473,11 +473,12 @@ function renderChunksTable() {
             `;
         }
 
+        const speedValCurrent = chunk.speed ? `${parseFloat(chunk.speed).toFixed(2)}x` : `${parseFloat(document.getElementById("range-speed")?.value || 1.0).toFixed(2)}x`;
         tr.innerHTML = `
             <td><strong>Đoạn ${chunk.id}</strong></td>
             <td>${chunk.text}</td>
             <td>${statusBadge}</td>
-            <td><code>${chunk.take}</code></td>
+            <td><code style="color: #00E5FF; font-weight: 700;">${speedValCurrent}</code></td>
             <td>${audioAction}</td>
         `;
         tbody.appendChild(tr);
@@ -584,9 +585,21 @@ async function getVoiceBase64(url) {
     return "";
 }
 
-async function generateSingleAudioChunk(idx) {
-    if (selectedChunkIndex === -1) { alert("Vui lòng click chọn 1 đoạn trong bảng trước!"); return; }
+async function generateSelectedChunk() {
+    if (selectedChunkIndex === -1 || !currentChunksList[selectedChunkIndex]) {
+        showToast("Chưa Chọn Đoạn", "Vui lòng click chọn 1 đoạn trong bảng trước khi tạo!", "warning");
+        return;
+    }
     await processSingleChunk(selectedChunkIndex);
+}
+
+async function generateSingleAudioChunk(idx) {
+    const targetIdx = (typeof idx === "number" && idx >= 0) ? idx : selectedChunkIndex;
+    if (targetIdx === -1 || !currentChunksList[targetIdx]) {
+        showToast("Chưa Chọn Đoạn", "Vui lòng click chọn 1 đoạn trong bảng trước khi tạo!", "warning");
+        return;
+    }
+    await processSingleChunk(targetIdx);
 }
 
 async function retryErrorChunks() {
@@ -736,7 +749,7 @@ async function processSingleChunk(idx, workerId = 0) {
 
         // 2. Thu thập các tham số tinh chỉnh chất lượng âm thanh từ giao diện
         const cfgVal = parseFloat(document.getElementById("range-cfg")?.value || 2.4);
-        const stepsVal = parseInt(document.getElementById("range-steps")?.value || 48, 10);
+        const stepsVal = parseInt(document.getElementById("range-steps")?.value || 64, 10);
         const tempVal = parseFloat(document.getElementById("range-temp")?.value || 0.1);
         const denoiseVal = document.getElementById("check-denoise") ? document.getElementById("check-denoise").checked : true;
 
@@ -802,6 +815,8 @@ async function processSingleChunk(idx, workerId = 0) {
                     if (blob.size > 200) {
                         item.audioUrl = URL.createObjectURL(blob);
                         item.status = "done";
+                        item.speed = speedVal;
+                        item.steps = stepsVal;
                         lastError = null;
                         break;
                     } else {
@@ -819,7 +834,7 @@ async function processSingleChunk(idx, workerId = 0) {
         if (item.audioUrl) {
             item.status = "done";
             try { renderChunksTable(); } catch(e) {}
-            try { addAppLog(`✓ Đoạn ${item.id} tạo voice AI THÀNH CÔNG!`); } catch(e) {}
+            try { addAppLog(`✓ Đoạn ${item.id} tạo voice AI THÀNH CÔNG (Tốc độ: ${speedVal}x, Steps: ${stepsVal})!`); } catch(e) {}
 
             // Update Billing/Quota an toàn tuyệt đối
             try {
@@ -888,16 +903,20 @@ function playSingleChunkAudio(e, idx) {
 
     if (player) {
         player.src = item.audioUrl;
+        player.playbackRate = 1.0;
         currentlyPlayingAudio = player;
         player.play().then(() => {
-            addAppLog(`Đang phát âm thanh Đoạn ${item.id}...`);
+            const spdText = item.speed ? ` (Tốc độ: ${item.speed}x)` : "";
+            addAppLog(`Đang phát âm thanh Đoạn ${item.id}${spdText}...`);
         }).catch(err => {
             console.log("Audio player play notice:", err);
         });
     } else {
         currentlyPlayingAudio = new Audio(item.audioUrl);
+        currentlyPlayingAudio.playbackRate = 1.0;
         currentlyPlayingAudio.play().then(() => {
-            addAppLog(`Đang phát âm thanh Đoạn ${item.id}...`);
+            const spdText = item.speed ? ` (Tốc độ: ${item.speed}x)` : "";
+            addAppLog(`Đang phát âm thanh Đoạn ${item.id}${spdText}...`);
         }).catch(err => {
             console.error("Lỗi phát audio:", err);
         });
@@ -2414,6 +2433,14 @@ window.closeVoiceBrowserModal = closeVoiceBrowserModal;
 window.renderVoiceBrowserList = renderVoiceBrowserList;
 window.playDirectVoiceSample = playDirectVoiceSample;
 window.selectVoiceFromBrowserModal = selectVoiceFromBrowserModal;
+window.generateSelectedChunk = generateSelectedChunk;
+window.generateSingleAudioChunk = generateSingleAudioChunk;
+window.generateAllChunks = generateAllChunks;
+window.retryErrorChunks = retryErrorChunks;
+window.playSelectedChunk = playSelectedChunk;
+window.stopGenerating = stopGenerating;
+window.stopPlaying = stopPlaying;
+window.splitChunks = splitChunks;
 window.mergeAllAudioChunks = mergeAllAudioChunks;
 window.togglePasswordVisibility = togglePasswordVisibility;
 window.editUserPassword = editUserPassword;

@@ -130,11 +130,11 @@ class OmniVoiceModel:
                 language = None
 
             try:
-                # Thiết lập mặc định tối ưu (num_step=48, cfg=2.4, temp=0.1)
+                # Thiết lập mặc định tối ưu (num_step=64, cfg=2.4, temp=0.1)
                 try:
-                    num_step_val = int(data.get("num_step") or data.get("steps") or 48)
+                    num_step_val = int(data.get("num_step") or data.get("steps") or 64)
                 except (TypeError, ValueError):
-                    num_step_val = 48
+                    num_step_val = 64
 
                 try:
                     cfg_val = float(data.get("guidance_scale") or data.get("cfg") or 2.4)

@@ -170,7 +170,7 @@
                                     <th style="width: 10%;">STT</th>
                                     <th style="width: 45%;">Nội dung đoạn</th>
                                     <th style="width: 15%;">Trạng thái</th>
-                                    <th style="width: 12%;">Bản chọn</th>
+                                    <th style="width: 12%;">Tốc độ</th>
                                     <th style="width: 18%;">Nghe / Tải</th>
                                 </tr>
                             </thead>
@@ -291,12 +291,13 @@
                         </label>
                     </div>
 
-                    <div class="slider-group omni-only-param">
+                    <!-- SỐ BƯỚC TẠO ÂM THANH (MẶC ĐỊNH 64, ẨN KHỎI WEB HTH-SUPPERVOICE THEO YÊU CẦU) -->
+                    <div class="slider-group omni-only-param" style="display: none !important;">
                         <div class="slider-header">
                             <span>Số bước tạo âm thanh (Steps):</span>
-                            <span class="slider-val" id="val-steps">48</span>
+                            <span class="slider-val" id="val-steps">64</span>
                         </div>
-                        <input type="range" id="range-steps" min="16" max="64" step="2" value="48" oninput="document.getElementById('val-steps').innerText=this.value">
+                        <input type="range" id="range-steps" min="16" max="64" step="2" value="64" oninput="document.getElementById('val-steps').innerText=this.value">
                     </div>
 
                     <div class="slider-group">
@@ -304,7 +305,7 @@
                             <span>Tốc độ đọc (Speed):</span>
                             <span class="slider-val" id="val-speed">1.00x</span>
                         </div>
-                        <input type="range" id="range-speed" min="0.5" max="2.0" step="0.05" value="1.0" oninput="document.getElementById('val-speed').innerText=this.value+'x'">
+                        <input type="range" id="range-speed" min="0.5" max="2.0" step="0.05" value="1.0" oninput="document.getElementById('val-speed').innerText=parseFloat(this.value).toFixed(2)+'x'">
                     </div>
 
                     <div class="slider-group omni-only-param">
@@ -697,6 +698,6 @@
 
     <script>window.startTime = Date.now(); window._chunkStartTime = Date.now();</script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="app.js?v=20260919_LOGIN_AND_PASS_TOGGLE_FIX_V5"></script>
+    <script src="app.js?v=20260919_STEPS64_SPEED_FIX_V6"></script>
 </body>
 </html>

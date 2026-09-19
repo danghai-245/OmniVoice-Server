@@ -61,7 +61,7 @@ class VoxTTSGenerator:
         text = (data.get("text") or data.get("prompt") or "").strip()
         language = data.get("language") or data.get("lang")
         speed = float(data.get("speed", 1.0))
-        num_step = int(data.get("num_step") or data.get("steps") or 48)
+        num_step = int(data.get("num_step") or data.get("steps") or 64)
         ref_text = data.get("ref_text") or data.get("prompt_text")
 
         # Lấy Base64 từ tất cả các trường khả dĩ
