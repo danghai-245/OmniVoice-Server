@@ -305,7 +305,7 @@
                             <span>Tốc độ đọc (Speed):</span>
                             <span class="slider-val" id="val-speed">1.00x</span>
                         </div>
-                        <input type="range" id="range-speed" min="0.5" max="2.0" step="0.05" value="1.0" oninput="document.getElementById('val-speed').innerText=parseFloat(this.value).toFixed(2)+'x'">
+                        <input type="range" id="range-speed" min="0.5" max="2.0" step="0.05" value="1.0" oninput="if(window.onSpeedSliderChange) window.onSpeedSliderChange(this.value); else document.getElementById('val-speed').innerText=parseFloat(this.value).toFixed(2)+'x';">
                     </div>
 
                     <div class="slider-group omni-only-param">
@@ -698,6 +698,6 @@
 
     <script>window.startTime = Date.now(); window._chunkStartTime = Date.now();</script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="app.js?v=20260919_STEPS64_SPEED_FIX_V6"></script>
+    <script src="app.js?v=20260920_WSOLA_REAL_SPEED_FIX_V7"></script>
 </body>
 </html>

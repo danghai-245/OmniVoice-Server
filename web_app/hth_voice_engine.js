@@ -658,6 +658,120 @@ function writeString(view, offset, string) {
     }
 }
 
+// BỘ THUẬT TOÁN WSOLA TIME-STRETCH BẢO TOÀN CAO ĐỘ (PITCH PRESERVATION) 100% CHUẨN STUDIO
+function wsolaTimeStretchFloatArray(input, speedRate) {
+    if (Math.abs(speedRate - 1.0) < 0.02) return input;
+    const winSize = 1024, hop = 256, searchRange = 256;
+    const inHop = Math.max(1, Math.round(hop * speedRate));
+    const outHop = hop;
+    const inLen = input.length;
+    const estOutLen = Math.floor(inLen / speedRate) + winSize * 2;
+    const out = new Float32Array(estOutLen);
+    const weight = new Float32Array(estOutLen);
+
+    // Hanning window
+    const win = new Float32Array(winSize);
+    for (let i = 0; i < winSize; i++) {
+        win[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (winSize - 1)));
+    }
+
+    let inPos = 0, outPos = 0;
+    const halfSearch = searchRange >> 1;
+
+    while (inPos + winSize + searchRange < inLen && outPos + winSize < estOutLen) {
+        let bestOffset = 0, bestCorr = -1e9;
+        for (let off = -halfSearch; off < halfSearch; off += 2) {
+            const idx = inPos + off;
+            if (idx >= 0 && idx + winSize <= inLen) {
+                let corr = 0;
+                for (let k = 0; k < winSize; k += 2) {
+                    corr += input[inPos + k] * input[idx + k];
+                }
+                if (corr > bestCorr) {
+                    bestCorr = corr;
+                    bestOffset = off;
+                }
+            }
+        }
+
+        const actualIn = Math.max(0, Math.min(inLen - winSize, inPos + bestOffset));
+        for (let k = 0; k < winSize; k++) {
+            out[outPos + k] += input[actualIn + k] * win[k];
+            weight[outPos + k] += win[k];
+        }
+        inPos += inHop;
+        outPos += outHop;
+    }
+
+    for (let k = 0; k < outPos; k++) {
+        if (weight[k] > 1e-4) {
+            out[k] /= weight[k];
+        }
+    }
+    return out.subarray(0, outPos);
+}
+
+function createWavBlobFromChannelData(channels, numChannels, sampleRate) {
+    const numSamples = channels[0].length;
+    const bytesPerSample = 2; // 16-bit PCM
+    const blockAlign = numChannels * bytesPerSample;
+    const buffer = new ArrayBuffer(44 + numSamples * blockAlign);
+    const view = new DataView(buffer);
+
+    writeString(view, 0, 'RIFF');
+    view.setUint32(4, 36 + numSamples * blockAlign, true);
+    writeString(view, 8, 'WAVE');
+    writeString(view, 12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true); // PCM
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * blockAlign, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, 16, true);
+    writeString(view, 36, 'data');
+    view.setUint32(40, numSamples * blockAlign, true);
+
+    let offset = 44;
+    for (let i = 0; i < numSamples; i++) {
+        for (let ch = 0; ch < numChannels; ch++) {
+            let s = Math.max(-1, Math.min(1, channels[ch][i]));
+            const val = s < 0 ? s * 0x8000 : s * 0x7FFF;
+            view.setInt16(offset, Math.round(val), true);
+            offset += 2;
+        }
+    }
+
+    return new Blob([buffer], { type: 'audio/wav' });
+}
+
+async function applySpeedToAudioBlob(blob, speedRate) {
+    if (Math.abs(speedRate - 1.0) < 0.02) return blob;
+    try {
+        const arrayBuffer = await blob.arrayBuffer();
+        const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioCtxClass();
+        let audioBuffer = null;
+        try {
+            audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        } finally {
+            if (audioCtx.state !== 'closed') audioCtx.close();
+        }
+
+        const numChannels = audioBuffer.numberOfChannels;
+        const sampleRate = audioBuffer.sampleRate;
+        const stretchedChannels = [];
+        for (let ch = 0; ch < numChannels; ch++) {
+            const rawChannel = audioBuffer.getChannelData(ch);
+            stretchedChannels.push(wsolaTimeStretchFloatArray(rawChannel, speedRate));
+        }
+        return createWavBlobFromChannelData(stretchedChannels, numChannels, sampleRate);
+    } catch (e) {
+        console.warn("Lỗi time-stretch WSOLA:", e);
+        return blob;
+    }
+}
+
 async function processSingleChunk(idx, workerId = 0) {
     var startTime = Date.now();
     var _chunkStartTime = Date.now();
@@ -811,16 +925,26 @@ async function processSingleChunk(idx, workerId = 0) {
                 }
 
                 if (response && response.ok) {
-                    const blob = await response.blob();
-                    if (blob.size > 200) {
-                        item.audioUrl = URL.createObjectURL(blob);
+                    const rawBlob = await response.blob();
+                    if (rawBlob.size > 200) {
+                        let finalBlob = rawBlob;
+                        if (Math.abs(speedVal - 1.0) >= 0.02) {
+                            try {
+                                addAppLog(`[WSOLA AI] Đang tinh chỉnh tốc độ đọc ${speedVal}x bảo toàn cao độ cho Đoạn ${item.id}...`);
+                                finalBlob = await applySpeedToAudioBlob(rawBlob, speedVal);
+                            } catch (eSpeed) {
+                                console.warn("Lỗi applySpeedToAudioBlob:", eSpeed);
+                                finalBlob = rawBlob;
+                            }
+                        }
+                        item.audioUrl = URL.createObjectURL(finalBlob);
                         item.status = "done";
                         item.speed = speedVal;
                         item.steps = stepsVal;
                         lastError = null;
                         break;
                     } else {
-                        lastError = new Error(`Dung lượng âm thanh quá nhỏ (${blob.size} bytes)`);
+                        lastError = new Error(`Dung lượng âm thanh quá nhỏ (${rawBlob.size} bytes)`);
                     }
                 } else {
                     lastError = new Error(`HTTP ${response ? response.status : 'Error'} - GPU phản hồi không hợp lệ`);
@@ -2448,4 +2572,18 @@ window.closeEditUserPassword = closeEditUserPassword;
 window.submitEditUserPassword = submitEditUserPassword;
 window.closeEditQuotaModal = closeEditQuotaModal;
 window.submitEditUserQuotaModal = submitEditUserQuotaModal;
+
+function onSpeedSliderChange(val) {
+    const num = parseFloat(val) || 1.0;
+    const disp = document.getElementById('val-speed');
+    if (disp) disp.innerText = num.toFixed(2) + 'x';
+
+    const player = document.getElementById("audio-player");
+    if (player && player.src) {
+        player.playbackRate = num;
+        player.defaultPlaybackRate = num;
+        player.preservesPitch = true;
+    }
+}
+window.onSpeedSliderChange = onSpeedSliderChange;
 
