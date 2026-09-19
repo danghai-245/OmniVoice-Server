@@ -683,11 +683,8 @@ async function processSingleChunk(idx, workerId = 0) {
     }
 
     try {
-        const speedVal = parseFloat(
-            document.getElementById("range-speed")?.value ||
-            document.getElementById("input-speech-speed")?.value ||
-            1.0
-        );
+        const speedInput = document.getElementById("range-speed") || document.getElementById("input-speech-speed");
+        const speedVal = speedInput ? (parseFloat(speedInput.value) || 1.0) : 1.0;
         
         // Chuẩn hóa văn bản sạch
         let cleanText = item.text || "";
@@ -743,12 +740,14 @@ async function processSingleChunk(idx, workerId = 0) {
         const tempVal = parseFloat(document.getElementById("range-temp")?.value || 0.1);
         const denoiseVal = document.getElementById("check-denoise") ? document.getElementById("check-denoise").checked : true;
 
-        addAppLog(`Gửi lệnh GPU Đoạn ${item.id} (Giọng: "${selectedVoiceName || 'Mặc định'}", Ngôn ngữ: [${resolvedLang.toUpperCase()}], CFG: ${cfgVal}, Steps: ${stepsVal}): "${cleanText.substring(0, 30)}..."`);
+        addAppLog(`Gửi lệnh GPU Đoạn ${item.id} (Giọng: "${selectedVoiceName || 'Mặc định'}", Ngôn ngữ: [${resolvedLang.toUpperCase()}], Tốc độ: ${speedVal}x, CFG: ${cfgVal}, Steps: ${stepsVal}): "${cleanText.substring(0, 30)}..."`);
 
         // Chuẩn bị payload hoàn chỉnh gửi lên GPU
         const requestPayload = {
             text: cleanText || item.text,
             speed: speedVal,
+            speech_speed: speedVal,
+            rate: speedVal,
             language: resolvedLang,
             lang: resolvedLang,
             guidance_scale: cfgVal,

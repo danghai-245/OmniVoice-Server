@@ -27,8 +27,8 @@ let modalGpuUrls = [
 
 let usersDatabase = {
     "USERS": {
-        "admin-0405": { "password": "pbkdf2-sha256$120000$aHRoLWFkbWluLXNhbHQtdjE=$H+0pdQBJE1bQIX/8/5uFz1hx1JSSIqs3c9K6jlNtBjg=", "quota": 99999999, "used": 0, "role": "Admin VIP" },
-        "tester": { "password": "pbkdf2-sha256$120000$aHRoLXRlc3Rlci1zYWx0LXYx$WbjN4jQqw5wjq0p8K0WHO7RYQCtmjNHypNhLaH3432g=", "quota": 100000, "used": 0, "role": "Dùng thử" }
+        "admin-0405": { "password": "Hth1624!", "quota": 99999999, "used": 0, "role": "Admin VIP" },
+        "tester": { "password": "123", "quota": 100000, "used": 0, "role": "Dùng thử" }
     }
 };
 
@@ -83,7 +83,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     loadSavedGeminiKey();
-    await loadLocalUserCache();
+    loadLocalUserCache();
     
     // Nạp cấu hình ngầm bất đồng bộ không block giao diện
     loadServerConfigFromGist().catch(err => console.warn("Lỗi nạp Supabase ngầm:", err));
@@ -142,7 +142,7 @@ function onAiEngineChange() {
 }
 
 // CACHE DỮ LIỆU TÀI KHOẢN TRÁNH BỊ MẤT KHI F5 VÀ KHÔNG BỊ BÁO SAI MẬT KHẨU
-async function loadLocalUserCache() {
+function loadLocalUserCache() {
     try {
         const cached = localStorage.getItem("hth_users_database");
         if (cached) {
@@ -151,7 +151,6 @@ async function loadLocalUserCache() {
                 usersDatabase = parsed;
             }
         }
-        await migrateLegacyPasswords(false);
     } catch (e) {
         console.error("Lỗi đọc cache local user:", e);
     }
@@ -163,68 +162,6 @@ function saveLocalUserCache() {
     } catch (e) {
         console.error("Lỗi lưu cache local user:", e);
     }
-}
-
-const PASSWORD_HASH_ALGORITHM = "pbkdf2-sha256";
-const PASSWORD_HASH_ITERATIONS = 120000;
-
-function bytesToBase64(bytes) {
-    let binary = "";
-    bytes.forEach(byte => { binary += String.fromCharCode(byte); });
-    return btoa(binary);
-}
-
-function base64ToBytes(value) {
-    const binary = atob(value);
-    return Uint8Array.from(binary, char => char.charCodeAt(0));
-}
-
-function isPasswordHash(value) {
-    return typeof value === "string" && value.startsWith(`${PASSWORD_HASH_ALGORITHM}$`);
-}
-
-async function hashPassword(password, saltBytes = null) {
-    const salt = saltBytes || crypto.getRandomValues(new Uint8Array(16));
-    const material = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
-    const derived = await crypto.subtle.deriveBits(
-        { name: "PBKDF2", salt, iterations: PASSWORD_HASH_ITERATIONS, hash: "SHA-256" },
-        material,
-        256
-    );
-    return `${PASSWORD_HASH_ALGORITHM}$${PASSWORD_HASH_ITERATIONS}$${bytesToBase64(salt)}$${bytesToBase64(new Uint8Array(derived))}`;
-}
-
-async function verifyPassword(password, storedPassword) {
-    if (typeof storedPassword !== "string" || !storedPassword) return false;
-    if (!isPasswordHash(storedPassword)) return storedPassword.trim() === password;
-    const parts = storedPassword.split("$");
-    if (parts.length !== 4 || Number(parts[1]) !== PASSWORD_HASH_ITERATIONS) return false;
-    try {
-        const candidate = await hashPassword(password, base64ToBytes(parts[2]));
-        const a = new TextEncoder().encode(candidate);
-        const b = new TextEncoder().encode(storedPassword);
-        if (a.length !== b.length) return false;
-        let diff = 0;
-        for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
-        return diff === 0;
-    } catch (e) {
-        return false;
-    }
-}
-
-async function migrateLegacyPasswords(syncRemote = true) {
-    let changed = false;
-    for (const account of Object.values(usersDatabase.USERS || {})) {
-        if (account && typeof account.password === "string" && !isPasswordHash(account.password)) {
-            account.password = await hashPassword(account.password);
-            changed = true;
-        }
-    }
-    if (changed) {
-        saveLocalUserCache();
-        if (syncRemote) await syncUsersToGist();
-    }
-    return changed;
 }
 
 const SUPABASE_PROJECT_ID = "jdhjimqktyiwffueaksh";
@@ -265,7 +202,6 @@ async function loadServerConfigFromGist() {
             }
             if (data.users) {
                 usersDatabase.USERS = data.users;
-                await migrateLegacyPasswords();
                 saveLocalUserCache();
                 console.log("Nạp thành công cấu hình Supabase Realtime:", usersDatabase.USERS);
             }
@@ -710,9 +646,9 @@ function writeString(view, offset, string) {
 }
 
 async function processSingleChunk(idx, workerId = 0) {
-    // Giữ timestamp trong phạm vi request hiện tại; không phụ thuộc biến global
-    // startTime của bản JS cũ đang có thể còn nằm trong cache trình duyệt.
-    const requestStartTime = Date.now();
+    var startTime = Date.now();
+    var _chunkStartTime = Date.now();
+    var chunkStartTime = Date.now();
     var curTime = Date.now();
     const item = currentChunksList[idx];
     if (!currentUser) { openAuthModal(); return; }
@@ -747,11 +683,8 @@ async function processSingleChunk(idx, workerId = 0) {
     }
 
     try {
-        const speedVal = parseFloat(
-            document.getElementById("range-speed")?.value ||
-            document.getElementById("input-speech-speed")?.value ||
-            1.0
-        );
+        const speedInput = document.getElementById("range-speed") || document.getElementById("input-speech-speed");
+        const speedVal = speedInput ? (parseFloat(speedInput.value) || 1.0) : 1.0;
         
         // Chuẩn hóa văn bản sạch
         let cleanText = item.text || "";
@@ -807,12 +740,14 @@ async function processSingleChunk(idx, workerId = 0) {
         const tempVal = parseFloat(document.getElementById("range-temp")?.value || 0.1);
         const denoiseVal = document.getElementById("check-denoise") ? document.getElementById("check-denoise").checked : true;
 
-        addAppLog(`Gửi lệnh GPU Đoạn ${item.id} (Giọng: "${selectedVoiceName || 'Mặc định'}", Ngôn ngữ: [${resolvedLang.toUpperCase()}], CFG: ${cfgVal}, Steps: ${stepsVal}): "${cleanText.substring(0, 30)}..."`);
+        addAppLog(`Gửi lệnh GPU Đoạn ${item.id} (Giọng: "${selectedVoiceName || 'Mặc định'}", Ngôn ngữ: [${resolvedLang.toUpperCase()}], Tốc độ: ${speedVal}x, CFG: ${cfgVal}, Steps: ${stepsVal}): "${cleanText.substring(0, 30)}..."`);
 
         // Chuẩn bị payload hoàn chỉnh gửi lên GPU
         const requestPayload = {
             text: cleanText || item.text,
             speed: speedVal,
+            speech_speed: speedVal,
+            rate: speedVal,
             language: resolvedLang,
             lang: resolvedLang,
             guidance_scale: cfgVal,
@@ -888,7 +823,7 @@ async function processSingleChunk(idx, workerId = 0) {
 
             // Update Billing/Quota an toàn tuyệt đối
             try {
-                const elapsedSec = Math.max(1.0, (Date.now() - requestStartTime) / 1000);
+                const elapsedSec = Math.max(1.0, (Date.now() - chunkStartTime) / 1000);
                 const costUsd = Math.max(0.0015, (elapsedSec * 0.00035) + ((cleanText || item.text).length * 0.000005));
                 if (typeof trackGpuBillingUsage === "function") trackGpuBillingUsage(gpuUrl, costUsd);
                 if (typeof currentUser !== "undefined" && currentUser && typeof currentUser.used === "number") {
@@ -1673,6 +1608,7 @@ function selectVoiceFromBrowserModal(voiceName) {
 
     const targetLangSelect = document.getElementById("select-target-lang");
     if (targetLangSelect && detectedLang) {
+        // Nếu select có option ngôn ngữ tương ứng thì chọn ngay, hoặc nếu có option auto
         const hasOption = Array.from(targetLangSelect.options).some(o => o.value === detectedLang);
         if (hasOption) {
             targetLangSelect.value = detectedLang;
@@ -1758,13 +1694,7 @@ async function submitAuth() {
         }
     });
 
-    const passwordValid = foundAcc ? await verifyPassword(passInput, foundAcc.password) : false;
-    if (foundAcc && passwordValid) {
-        if (!isPasswordHash(foundAcc.password)) {
-            foundAcc.password = await hashPassword(passInput);
-            saveLocalUserCache();
-            syncUsersToGist().catch(() => {});
-        }
+    if (foundAcc && (foundAcc.password === passInput || foundAcc.password.trim() === passInput)) {
         // KHÔI PHỤC BẢO TOÀN SỐ KÝ TỰ ĐÃ SỬ DỤNG CHỐNG RESET VỀ 0
         const savedUsed = localStorage.getItem(`quota_used_${foundUsername.toLowerCase()}`);
         let actualUsed = foundAcc.used || 0;
@@ -1886,11 +1816,11 @@ function closeAdminModal() {
     document.getElementById("admin-modal").classList.add("hidden");
 }
 
-function copyUserAccountInfo(username) {
-    const textToCopy = `Tài khoản: ${username}`;
+function copyUserAccountInfo(username, password) {
+    const textToCopy = `Tài khoản: ${username}\nMật khẩu: ${password}`;
     if (navigator.clipboard && window.isSecureContext) {
         navigator.clipboard.writeText(textToCopy).then(() => {
-            showToast("Đã Sao Chép", `Đã copy Tài khoản: "${username}" vào Bộ nhớ tạm!`, "success");
+            showToast("Đã Sao Chép", `Đã copy Tài khoản: "${username}" và Mật khẩu vào Bộ nhớ tạm!`, "success");
         }).catch(() => {
             fallbackCopyTextToClipboard(textToCopy, username);
         });
@@ -1909,7 +1839,7 @@ function fallbackCopyTextToClipboard(text, username) {
     textArea.select();
     try {
         document.execCommand('copy');
-        showToast("Đã Sao Chép", `Đã copy Tài khoản: "${username}" vào Bộ nhớ tạm!`, "success");
+        showToast("Đã Sao Chép", `Đã copy Tài khoản: "${username}" và Mật khẩu vào Bộ nhớ tạm!`, "success");
     } catch (err) {
         showToast("Lỗi Sao Chép", "Không thể chép vào Clipboard thiết bị!", "error");
     }
@@ -1926,13 +1856,13 @@ function renderUserList() {
         const u = usersDatabase.USERS[username];
         const tr = document.createElement("tr");
 
-        const passDisplay = '<code style="color:#10B981;">Đã mã hóa</code>';
+        const passDisplay = isAdmin ? `<code>${u.password}</code>` : '<code>••••••••</code>';
 
         tr.innerHTML = `
             <td>
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
                     <strong>${username}</strong>
-                    <button type="button" onclick="copyUserAccountInfo('${username}')" title="Copy Tài khoản" style="background: rgba(0, 229, 255, 0.15); border: 1px solid rgba(0, 229, 255, 0.4); color: #00E5FF; padding: 2px 8px; border-radius: 6px; cursor: pointer; font-size: 0.72rem; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
+                    <button type="button" onclick="copyUserAccountInfo('${username}', '${u.password}')" title="Copy Tài khoản & Mật khẩu" style="background: rgba(0, 229, 255, 0.15); border: 1px solid rgba(0, 229, 255, 0.4); color: #00E5FF; padding: 2px 8px; border-radius: 6px; cursor: pointer; font-size: 0.72rem; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
                         <i class="fa-solid fa-copy"></i> Copy
                     </button>
                 </div>
@@ -1940,13 +1870,15 @@ function renderUserList() {
             <td>
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
                     ${passDisplay}
+                    <button type="button" onclick="copyUserAccountInfo('${username}', '${u.password}')" title="Copy Cặp TK/MK" style="background: rgba(124, 77, 255, 0.15); border: 1px solid rgba(124, 77, 255, 0.4); color: #B388FF; padding: 2px 8px; border-radius: 6px; cursor: pointer; font-size: 0.72rem; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;">
+                        <i class="fa-solid fa-key"></i> Copy MK
+                    </button>
                 </div>
             </td>
             <td>${u.used.toLocaleString('vi-VN')} / ${u.quota.toLocaleString('vi-VN')} ký tự</td>
             <td><span class="badge-role">${u.role}</span></td>
             <td>
-                <button type="button" class="btn-action-edit" onclick="copyUserAccountInfo('${username}')" style="background: rgba(0, 229, 255, 0.15); border: 1px solid rgba(0, 229, 255, 0.4); color: #00E5FF; margin-right: 4px;" title="Copy Tài khoản vào Clipboard"><i class="fa-solid fa-copy"></i> Copy TK</button>
-                ${isAdmin ? `<button class="btn-action-edit" onclick="editUserPassword('${username}')"><i class="fa-solid fa-key"></i> Sửa Mật khẩu</button>` : ''}
+                <button type="button" class="btn-action-edit" onclick="copyUserAccountInfo('${username}', '${u.password}')" style="background: rgba(0, 229, 255, 0.15); border: 1px solid rgba(0, 229, 255, 0.4); color: #00E5FF; margin-right: 4px;" title="Copy Tài khoản & Mật khẩu vào Clipboard"><i class="fa-solid fa-copy"></i> Copy TK/MK</button>
                 ${isAdmin ? `<button class="btn-action-edit" onclick="editUserQuota('${username}')"><i class="fa-solid fa-pen"></i> Sửa Ký Tự</button>` : ''}
                 ${isAdmin && !username.toLowerCase().includes('admin') ? `<button class="btn-action-del" onclick="deleteUser('${username}')"><i class="fa-solid fa-trash"></i> Xóa</button>` : ''}
             </td>
@@ -2009,7 +1941,7 @@ async function addNewUser() {
         return;
     }
 
-    usersDatabase.USERS[name] = { password: await hashPassword(pass), quota: quota, used: 0, role: role };
+    usersDatabase.USERS[name] = { password: pass, quota: quota, used: 0, role: role };
     document.getElementById("new-user-name").value = "";
     document.getElementById("new-user-pass").value = "";
     renderUserList();
@@ -2019,7 +1951,6 @@ async function addNewUser() {
 }
 
 let pendingDeleteUsername = "";
-let pendingEditPasswordUsername = "";
 let pendingEditQuotaUsername = "";
 
 function deleteUser(username) {
@@ -2049,50 +1980,6 @@ async function executeDeleteUser() {
     renderUserList();
     await syncUsersToGist();
     showToast("Đã Xóa Tài Khoản", `Đã xóa vĩnh viễn tài khoản "${targetUser}" khỏi hệ thống!`, "warning");
-}
-
-function editUserPassword(username) {
-    const isAdmin = currentUser && (String(currentUser.role || "").includes("Admin") || currentUser.username.toLowerCase().includes("admin"));
-    if (!isAdmin || !usersDatabase.USERS[username]) return;
-    pendingEditPasswordUsername = username;
-    const titleEl = document.getElementById("edit-password-user-title");
-    if (titleEl) titleEl.innerText = `Tài khoản: "${username}"`;
-    document.getElementById("input-modal-new-password").value = "";
-    document.getElementById("input-modal-confirm-password").value = "";
-    document.getElementById("edit-password-modal").classList.remove("hidden");
-    setTimeout(() => document.getElementById("input-modal-new-password")?.focus(), 100);
-}
-
-function closeEditUserPassword() {
-    document.getElementById("edit-password-modal")?.classList.add("hidden");
-    pendingEditPasswordUsername = "";
-}
-
-async function submitEditUserPassword() {
-    const isAdmin = currentUser && (String(currentUser.role || "").includes("Admin") || currentUser.username.toLowerCase().includes("admin"));
-    if (!isAdmin || !pendingEditPasswordUsername) return;
-    const newPassword = document.getElementById("input-modal-new-password").value;
-    const confirmPassword = document.getElementById("input-modal-confirm-password").value;
-    if (newPassword.length < 8) {
-        showToast("Mật khẩu quá ngắn", "Mật khẩu mới phải có ít nhất 8 ký tự.", "error");
-        return;
-    }
-    if (newPassword !== confirmPassword) {
-        showToast("Mật khẩu không khớp", "Vui lòng nhập lại đúng mật khẩu mới.", "error");
-        return;
-    }
-    try {
-        const hashedPassword = await hashPassword(newPassword);
-        usersDatabase.USERS[pendingEditPasswordUsername].password = hashedPassword;
-        saveLocalUserCache();
-        renderUserList();
-        const username = pendingEditPasswordUsername;
-        closeEditUserPassword();
-        await syncUsersToGist();
-        showToast("Đổi mật khẩu thành công", `Đã cập nhật mật khẩu cho tài khoản "${username}".`, "success");
-    } catch (e) {
-        showToast("Không thể đổi mật khẩu", "Trình duyệt không hỗ trợ mã hóa hoặc đồng bộ thất bại.", "error");
-    }
 }
 
 function editUserQuota(username) {
